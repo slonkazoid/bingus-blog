@@ -27,3 +27,7 @@ pre > code {
 	background-color: var(--base);
 	color: var(--text);
 }
+
+img {
+	max-width: 100%;
+}
