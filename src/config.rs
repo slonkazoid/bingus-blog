@@ -87,8 +87,8 @@ pub async fn load() -> Result<Config> {
             let mut buf = String::new();
             file.read_to_string(&mut buf)
                 .await
-                .with_context(|| "couldn't read configuration file")?;
-            toml::from_str(&buf).with_context(|| "couldn't parse configuration")
+                .context("couldn't read configuration file")?;
+            toml::from_str(&buf).context("couldn't parse configuration")
         }
         Err(err) => match err.kind() {
             std::io::ErrorKind::NotFound => {
@@ -104,7 +104,7 @@ pub async fn load() -> Result<Config> {
                     Ok(mut file) => file
                         .write_all(
                             toml::to_string_pretty(&config)
-                                .with_context(|| "couldn't serialize configuration")?
+                                .context("couldn't serialize configuration")?
                                 .as_bytes(),
                         )
                         .await

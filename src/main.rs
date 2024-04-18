@@ -141,7 +141,7 @@ async fn main() -> eyre::Result<()> {
 
     let config = config::load()
         .await
-        .with_context(|| "couldn't load configuration")?;
+        .context("couldn't load configuration")?;
 
     let mut tasks = JoinSet::new();
     let mut cancellation_tokens = Vec::new();
@@ -154,7 +154,7 @@ async fn main() -> eyre::Result<()> {
         let compressed = tokio::task::spawn_blocking(|| compress_epicly("static"))
             .await
             .unwrap()
-            .with_context(|| "couldn't compress static")?;
+            .context("couldn't compress static")?;
 
         let _handle = span.enter();
 
@@ -170,7 +170,7 @@ async fn main() -> eyre::Result<()> {
             tasks.spawn(async move {
                 watch(span, passed_token, Default::default())
                     .await
-                    .with_context(|| "failed to watch static")
+                    .context("failed to watch static")
                     .unwrap()
             });
             cancellation_tokens.push(token);
@@ -186,14 +186,14 @@ async fn main() -> eyre::Result<()> {
         let load_cache = async {
             let mut cache_file = tokio::fs::File::open(&path)
                 .await
-                .with_context(|| "failed to open cache file")?;
+                .context("failed to open cache file")?;
             let mut serialized = Vec::with_capacity(4096);
             cache_file
                 .read_to_end(&mut serialized)
                 .await
-                .with_context(|| "failed to read cache file")?;
-            let cache = bitcode::deserialize(serialized.as_slice())
-                .with_context(|| "failed to parse cache")?;
+                .context("failed to read cache file")?;
+            let cache =
+                bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")?;
             Ok::<PostManager, color_eyre::Report>(PostManager::new_with_cache(
                 config.posts_dir.clone(),
                 config.render.clone(),
@@ -260,7 +260,7 @@ async fn main() -> eyre::Result<()> {
         })?;
     let local_addr = listener
         .local_addr()
-        .with_context(|| "couldn't get socket address")?;
+        .context("couldn't get socket address")?;
     info!("listening on http://{}", local_addr);
 
     let sigint = signal::ctrl_c();
@@ -284,7 +284,7 @@ async fn main() -> eyre::Result<()> {
 
     tokio::select! {
         result = &mut server => {
-            result.with_context(|| "failed to serve app")?;
+            result.context("failed to serve app")?;
         },
         _ = sigint => {
             info!("received SIGINT, exiting gracefully");
@@ -299,9 +299,9 @@ async fn main() -> eyre::Result<()> {
         for token in cancellation_tokens {
             token.cancel();
         }
-        server.await.with_context(|| "failed to serve app")?;
+        server.await.context("failed to serve app")?;
         while let Some(task) = tasks.join_next().await {
-            task.with_context(|| "failed to join task")?;
+            task.context("failed to join task")?;
         }
 
         // write cache to file
@@ -311,15 +311,14 @@ async fn main() -> eyre::Result<()> {
         });
         if let Some(path) = config.cache_file.as_ref() {
             let cache = posts.into_cache();
-            let mut serialized =
-                bitcode::serialize(&cache).with_context(|| "failed to serialize cache")?;
+            let mut serialized = bitcode::serialize(&cache).context("failed to serialize cache")?;
             let mut cache_file = tokio::fs::File::create(path)
                 .await
                 .with_context(|| format!("failed to open cache at {}", path.display()))?;
             cache_file
                 .write_all(serialized.as_mut_slice())
                 .await
-                .with_context(|| "failed to write cache to file")?;
+                .context("failed to write cache to file")?;
             info!("wrote cache to {}", path.display());
         }
         Ok::<(), color_eyre::Report>(())
@@ -336,7 +335,7 @@ async fn main() -> eyre::Result<()> {
 
     tokio::select! {
         result = cleanup => {
-            result.with_context(|| "cleanup failed, oh well")?;
+            result.context("cleanup failed, oh well")?;
         },
         _ = sigint => {
             warn!("received second signal, exiting");
