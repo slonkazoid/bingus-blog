@@ -39,6 +39,7 @@ pub fn render_with_config(markdown: &str, config: &RenderConfig, front_matter: b
     options.extension.autolink = true;
     options.extension.tasklist = true;
     options.extension.superscript = true;
+    options.extension.strikethrough = true;
     options.extension.multiline_block_quotes = true;
     options.extension.header_ids = Some(String::new());
     if front_matter {
