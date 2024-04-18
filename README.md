@@ -2,6 +2,7 @@
 title: "README"
 description: "the README.md file of this project"
 author: "slonkazoid"
+created_at: 2024-04-18T01:15:26Z
 ---
 
 # bingus-blog
