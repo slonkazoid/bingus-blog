@@ -16,10 +16,7 @@ impl Display for FronmaBalls {
         match &self.0 {
             fronma::error::Error::MissingBeginningLine => f.write_str("missing beginning line"),
             fronma::error::Error::MissingEndingLine => f.write_str("missing ending line"),
-            fronma::error::Error::SerdeYaml(_) => {
-                unimplemented!("no yaml allowed in this household")
-            }
-            fronma::error::Error::Toml(toml_error) => write!(f, "{}", toml_error),
+            fronma::error::Error::SerdeYaml(yaml_error) => write!(f, "{}", yaml_error),
         }
     }
 }

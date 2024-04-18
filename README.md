@@ -1,7 +1,7 @@
 ---
-title = "README"
-description = "the README.md file of this project"
-author = "slonkazoid"
+title: "README"
+description: "the README.md file of this project"
+author: "slonkazoid"
 ---
 
 # silly-blog

@@ -6,8 +6,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use askama::Template;
 use chrono::{DateTime, Utc};
-use fronma::engines::Toml;
-use fronma::parser::{parse_with_engine, ParsedData};
+use fronma::parser::{parse, ParsedData};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
@@ -113,7 +112,7 @@ impl PostManager {
         let mut content = String::with_capacity(stat.len() as usize);
         file.read_to_string(&mut content).await?;
 
-        let ParsedData { headers, body } = parse_with_engine::<FrontMatter, Toml>(&content)?;
+        let ParsedData { headers, body } = parse::<FrontMatter>(&content)?;
         let metadata = headers.into_full(name.to_owned(), created, Some(modified));
         let parsing = parsing_start.elapsed();
 
