@@ -355,6 +355,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "bingus-blog"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "askama_axum",
+ "async-compression",
+ "axum 0.7.5",
+ "bitcode",
+ "chrono",
+ "clap",
+ "color-eyre",
+ "comrak",
+ "console-subscriber",
+ "fronma",
+ "futures-util",
+ "notify",
+ "scc",
+ "serde",
+ "syntect",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1831,35 +1860,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "silly-blog"
-version = "0.1.0"
-dependencies = [
- "askama",
- "askama_axum",
- "async-compression",
- "axum 0.7.5",
- "bitcode",
- "chrono",
- "clap",
- "color-eyre",
- "comrak",
- "console-subscriber",
- "fronma",
- "futures-util",
- "notify",
- "scc",
- "serde",
- "syntect",
- "thiserror",
- "tokio",
- "tokio-util",
- "toml",
- "tower-http",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

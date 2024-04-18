@@ -44,7 +44,7 @@ impl Default for Config {
         Self {
             host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 3000,
-            title: "silly-blog".into(),
+            title: "bingus-blog".into(),
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
             render: Default::default(),
             posts_dir: "posts".into(),

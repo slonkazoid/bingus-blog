@@ -1,8 +1,8 @@
 [package]
-name = "silly-blog"
+name = "bingus-blog"
 version = "0.1.0"
 edition = "2021"
-default-run = "silly-blog"
+default-run = "bingus-blog"
 
 [[bin]]
 name = "syntect-to-css"

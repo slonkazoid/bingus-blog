@@ -4,7 +4,7 @@ description: "the README.md file of this project"
 author: "slonkazoid"
 ---
 
-# silly-blog
+# bingus-blog
 
 blazingly fast markdown blog software written in rust memory safe
 
