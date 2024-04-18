@@ -1,0 +1,134 @@
+/* colors */
+:root {
+	--base: #1e1e2e;
+	--text: #cdd6f4;
+	--crust: #11111b;
+	--surface0: #313244;
+	--subtext0: #a6adc8;
+	--subtext1: #bac2de;
+	--pink: #f5c2e7;
+	--rosewater: #f5e0dc;
+	--blue: #89b4fa;
+	--mauve: #cba6f7;
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--base: #eff1f5;
+		--text: #4c4f69;
+		--crust: #dce0e8;
+		--surface0: #ccd0da;
+		--subtext0: #6c6f85;
+		--subtext1: #5c5f77;
+		--pink: #ea76cb;
+		--rosewater: #dc8a78;
+		--blue: #1e66f5;
+		--mauve: #8839ef;
+	}
+}
+
+:root {
+	/* please have one at least one good monospace font */
+	font-family: "Hack Nerd Font", "Hack", "JetBrains Mono",
+		"JetBrainsMono Nerd Font", "Ubuntu Mono", monospace, sans-serif;
+
+	background-color: var(--base);
+	color: var(--text);
+}
+
+a {
+	color: var(--pink);
+}
+
+a:hover {
+	color: var(--rosewater);
+}
+
+a:active {
+	color: var(--blue);
+}
+
+a:visited {
+	color: var(--mauve);
+}
+
+code {
+	padding: 0.15em 0.4em;
+
+	background-color: var(--surface0);
+	color: var(--subtext0);
+}
+
+.tooltipped {
+	border-bottom: 1px dotted var(--text);
+}
+
+hr {
+	color: var(--subtext1);
+}
+
+footer {
+	text-align: end;
+	font-size: small;
+	opacity: 50%;
+}
+
+.post-author {
+	font-size: smaller;
+	opacity: 0.65;
+}
+
+/* BEGIN cool effect everyone liked */
+
+body {
+	margin: 0;
+	padding: 0;
+
+	background-color: var(--base);
+}
+
+main {
+	padding: 1em;
+
+	background-color: var(--base);
+}
+
+body > main > h1:first-child {
+	margin-top: 0;
+}
+
+@media (min-width: 956px) {
+	:root {
+		--target-ratio: 0.7; /* 669px - 1344x */
+		--width: min(100% * var(--target-ratio), 1920px * var(--target-ratio));
+		--padding: 4em;
+		--padded-width: calc(var(--width) - var(--padding) * 2);
+	}
+
+	body {
+		padding: 4em 0;
+		min-height: calc(100vh - 8em);
+
+		background: var(--crust);
+		background: linear-gradient(
+			90deg,
+			var(--base) 0%,
+			var(--crust) calc((100% - var(--width)) / 2),
+			var(--crust) calc(50% + var(--width) / 2),
+			var(--base) 100%
+		);
+	}
+
+	body > * {
+		margin: auto;
+		padding: var(--padding);
+		width: var(--padded-width);
+	}
+
+	body > footer {
+		padding: initial;
+		width: var(--width);
+	}
+}
+
+/* END cool effect everyone liked */

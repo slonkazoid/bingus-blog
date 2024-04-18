@@ -1,0 +1,7 @@
+/target
+/static/**/*.gz
+/media/*
+/posts/*
+!/posts/README.md
+/.slbg-cache
+/config.toml

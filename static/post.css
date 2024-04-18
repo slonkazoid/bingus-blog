@@ -1,0 +1,29 @@
+.anchor {
+	text-decoration: none;
+}
+.anchor::before {
+	content: "§";
+}
+.anchor::after {
+	content: " ";
+}
+
+code {
+	font-size: larger;
+	padding: 0.15em 0.4em;
+
+	background-color: var(--surface0);
+	color: var(--subtext1);
+}
+
+/* code blocks */
+pre > code {
+	border: 2px solid var(--surface0);
+	padding: 1.25em 1.5em;
+	display: block;
+	overflow-wrap: break-word;
+	white-space: pre-wrap;
+
+	background-color: var(--base);
+	color: var(--text);
+}
