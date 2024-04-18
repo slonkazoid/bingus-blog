@@ -1,8 +1,9 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use scc::HashMap;
-use serde::de::{SeqAccess, Visitor};
-use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::Visitor;
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::config::RenderConfig;
 use crate::post::PostMetadata;
@@ -113,15 +114,13 @@ impl Serialize for Cache {
         S: Serializer,
     {
         let cache = self.clone().into_inner();
-        let mut seq = serializer.serialize_seq(Some(cache.len()))?;
+        let mut map = serializer.serialize_map(Some(cache.len()))?;
         let mut entry = cache.first_entry();
         while let Some(occupied) = entry {
-            let key = occupied.key().clone();
-            let value = occupied.get().clone();
-            seq.serialize_element(&(key, value))?;
+            map.serialize_entry(occupied.key(), occupied.get())?;
             entry = occupied.next();
         }
-        seq.end()
+        map.end()
     }
 }
 
@@ -138,16 +137,16 @@ impl<'de> Deserialize<'de> for Cache {
                 write!(formatter, "meow")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
-                A: SeqAccess<'de>,
+                A: serde::de::MapAccess<'de>,
             {
-                let cache = match seq.size_hint() {
+                let cache = match map.size_hint() {
                     Some(size) => HashMap::with_capacity(size),
                     None => HashMap::new(),
                 };
 
-                while let Some((key, value)) = seq.next_element::<(String, CacheValue)>()? {
+                while let Some((key, value)) = map.next_entry::<String, CacheValue>()? {
                     cache.insert(key, value).ok();
                 }
 
@@ -155,6 +154,6 @@ impl<'de> Deserialize<'de> for Cache {
             }
         }
 
-        deserializer.deserialize_seq(CoolVisitor)
+        deserializer.deserialize_map(CoolVisitor)
     }
 }
