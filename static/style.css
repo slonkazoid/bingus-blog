@@ -73,7 +73,7 @@ hr {
 footer {
 	text-align: end;
 	font-size: small;
-	opacity: 50%;
+	color: var(--subtext0);
 }
 
 .post-author {
