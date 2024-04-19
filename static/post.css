@@ -1,5 +1,7 @@
 .anchor {
 	text-decoration: none;
+	font-size: x-large;
+	vertical-align: middle;
 }
 .anchor::before {
 	content: "§";
@@ -9,8 +11,10 @@
 }
 
 code {
-	font-size: larger;
-	padding: 0.15em 0.4em;
+	padding: 0.15em 0.3em;
+	overflow-wrap: break-word;
+	word-break: break-all;
+	white-space: pre-wrap;
 
 	background-color: var(--surface0);
 	color: var(--subtext1);
@@ -21,8 +25,6 @@ pre > code {
 	border: 2px solid var(--surface0);
 	padding: 1.25em 1.5em;
 	display: block;
-	overflow-wrap: break-word;
-	white-space: pre-wrap;
 
 	background-color: var(--base);
 	color: var(--text);
@@ -30,4 +32,25 @@ pre > code {
 
 img {
 	max-width: 100%;
+}
+
+table,
+td,
+th {
+	border: 1px solid var(--text);
+	border-collapse: collapse;
+	padding: 0.5em;
+}
+
+th {
+	font-weight: bold;
+}
+
+td {
+	word-break: break-word;
+}
+
+th,
+td:nth-child(1) {
+	word-break: keep-all;
 }
