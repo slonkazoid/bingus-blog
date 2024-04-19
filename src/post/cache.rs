@@ -134,7 +134,7 @@ impl<'de> Deserialize<'de> for Cache {
             type Value = Cache;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "meow")
+                write!(formatter, "expected a map")
             }
 
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>

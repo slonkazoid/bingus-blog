@@ -10,11 +10,16 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{error, info};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SyntectConfig {
+    pub load_defaults: bool,
+    pub themes_dir: Option<PathBuf>,
+    pub theme: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(default)]
 pub struct RenderConfig {
-    pub syntect_load_defaults: bool,
-    pub syntect_themes_dir: Option<PathBuf>,
-    pub syntect_theme: Option<String>,
+    pub syntect: SyntectConfig,
 }
 
 #[cfg(feature = "precompression")]
@@ -37,6 +42,7 @@ pub struct Config {
     #[cfg(feature = "precompression")]
     pub precompression: PrecompressionConfig,
     pub cache_file: Option<PathBuf>,
+    pub markdown_access: bool,
 }
 
 impl Default for Config {
@@ -51,6 +57,7 @@ impl Default for Config {
             #[cfg(feature = "precompression")]
             precompression: Default::default(),
             cache_file: None,
+            markdown_access: true,
         }
     }
 }
@@ -58,9 +65,11 @@ impl Default for Config {
 impl Default for RenderConfig {
     fn default() -> Self {
         Self {
-            syntect_load_defaults: false,
-            syntect_themes_dir: Some("themes".into()),
-            syntect_theme: Some("Catppuccin Mocha".into()),
+            syntect: SyntectConfig {
+                load_defaults: false,
+                themes_dir: Some("themes".into()),
+                theme: Some("Catppuccin Mocha".into()),
+            },
         }
     }
 }

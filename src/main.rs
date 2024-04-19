@@ -63,9 +63,10 @@ struct ViewPostTemplate {
     meta: PostMetadata,
     rendered: String,
     rendered_in: RenderStats,
+    markdown_access: bool,
 }
 
-type AppResult<T> = Result<T, AppError>;
+type AppResult<T> = Result<T, PostError>;
 
 #[derive(Error, Debug)]
 enum AppError {
@@ -107,16 +108,27 @@ async fn index(State(state): State<ArcState>) -> AppResult<IndexTemplate> {
 }
 
 async fn post(State(state): State<ArcState>, Path(name): Path<String>) -> AppResult<Response> {
-    let post = state.posts.get_post(&name).await?;
+    if name.ends_with(".md") && state.config.markdown_access {
+        let mut file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .open(state.config.posts_dir.join(&name))
+            .await?;
 
-    let post = ViewPostTemplate {
-        meta: post.0,
-        rendered: post.1,
-        rendered_in: post.2,
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).await?;
+
+        Ok(([("content-type", "text/plain")], buf).into_response())
+    } else {
+        let post = state.posts.get_post(&name).await?;
+        let page = ViewPostTemplate {
+            meta: post.0,
+            rendered: post.1,
+            rendered_in: post.2,
+            markdown_access: state.config.markdown_access,
+        };
+
+        Ok(page.into_response())
     }
-    .into_response();
-
-    Ok(post)
 }
 
 async fn all_posts(State(state): State<ArcState>) -> AppResult<Json<Vec<PostMetadata>>> {

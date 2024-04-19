@@ -3,7 +3,6 @@ use std::sync::{Arc, OnceLock, RwLock};
 use comrak::markdown_to_html_with_plugins;
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::ComrakOptions;
-use comrak::Plugins;
 use comrak::RenderPlugins;
 use syntect::highlighting::ThemeSet;
 
@@ -18,22 +17,22 @@ fn syntect_adapter(config: &RenderConfig) -> Arc<SyntectAdapter> {
 }
 
 fn build_syntect(config: &RenderConfig) -> Arc<SyntectAdapter> {
-    let mut theme_set = if config.syntect_load_defaults {
+    let mut theme_set = if config.syntect.load_defaults {
         ThemeSet::load_defaults()
     } else {
         ThemeSet::new()
     };
-    if let Some(path) = config.syntect_themes_dir.as_ref() {
+    if let Some(path) = config.syntect.themes_dir.as_ref() {
         theme_set.add_from_folder(path).unwrap();
     }
     let mut builder = SyntectAdapterBuilder::new().theme_set(theme_set);
-    if let Some(theme) = config.syntect_theme.as_ref() {
+    if let Some(theme) = config.syntect.theme.as_ref() {
         builder = builder.theme(theme);
     }
     Arc::new(builder.build())
 }
 
-pub fn render_with_config(markdown: &str, config: &RenderConfig, front_matter: bool) -> String {
+pub fn render(markdown: &str, config: &RenderConfig, front_matter: bool) -> String {
     let mut options = ComrakOptions::default();
     options.extension.table = true;
     options.extension.autolink = true;
@@ -55,10 +54,5 @@ pub fn render_with_config(markdown: &str, config: &RenderConfig, front_matter: b
         .build()
         .unwrap();
 
-    render(markdown, &options, &plugins)
-}
-
-pub fn render(markdown: &str, options: &ComrakOptions, plugins: &Plugins) -> String {
-    // TODO: post-processing
-    markdown_to_html_with_plugins(markdown, options, plugins)
+    markdown_to_html_with_plugins(markdown, &options, &plugins)
 }

@@ -13,7 +13,7 @@ use tokio::io::AsyncReadExt;
 use tracing::warn;
 
 use crate::config::RenderConfig;
-use crate::markdown_render;
+use crate::markdown_render::render;
 use crate::post::cache::Cache;
 use crate::PostError;
 
@@ -117,7 +117,7 @@ impl PostManager {
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let rendered_markdown = markdown_render::render_with_config(body, &self.config, false);
+        let rendered_markdown = render(body, &self.config, false);
         let post = Post {
             meta: &metadata,
             rendered_markdown,

@@ -30,6 +30,9 @@
 		{% when RenderStats::Cached(total) %}
 			retrieved from cache in {{ total|duration }}
 		{% endmatch %}
+		{% if markdown_access %}
+			- <a href="/posts/{{ meta.name }}.md">view raw</a>
+		{% endif %}
 		</footer>
 	</body>
 </html>
