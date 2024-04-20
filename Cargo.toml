@@ -47,3 +47,4 @@ tower-http = { version = "0.5.2", features = [
 ], default-features = false }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+zstd = "0.13.1"

@@ -20,7 +20,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [ ] better error reporting and pages
 - [ ] better tracing
 - [ ] cache cleanup task
-- [ ] (de)compress cache with zstd on startup/shutdown
+- [x] (de)compress cache with zstd on startup/shutdown
 - [ ] make date parsing less strict
 - [ ] make date formatting better
 - [ ] clean up imports and require less features
@@ -33,27 +33,29 @@ the default configuration with comments looks like this
 
 ```toml
 # main settings
-host = "0.0.0.0" # ip to listen on
-port = 3000 # port to listen on
-title = "bingus-blog" # title of the website
+host = "0.0.0.0"       # ip to listen on
+port = 3000            # port to listen on
+title = "bingus-blog"  # title of the website
 description = "blazingly fast markdown blog software written in rust memory safe" # description of the website
-posts_dir = "posts" # where posts are stored
+posts_dir = "posts"    # where posts are stored
 markdown_access = true # allow users to see the raw markdown of a post
 
 [cache] # cache settings
 enable = true # save metadata and rendered posts into RAM
-              # highly recommended, only turn off if asolutely necessary
-#persistence = "..." # file to save the cache to on shutdown, and
-                     # to load from on startup. uncomment to enable
+              # highly recommended, only turn off if absolutely necessary
+persistence = false   # save the cache to on shutdown and load on startup
+file = "cache"        # file to save the cache to
+compress = true       # compress the cache file
+compression_level = 3 # zstd compression level, 3 is recommended
 
 [render] # post rendering settings
-syntect.load_defaults = false # include default syntect themes
-syntect.themes_dir = "themes" # directory to include themes from
+syntect.load_defaults = false      # include default syntect themes
+syntect.themes_dir = "themes"      # directory to include themes from
 syntect.theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)
 
 [precompression] # precompression settings
-enable = false # gzip every file in static/ on startup
-watch = true # keep watching and gzip files as they change
+enable = false   # gzip every file in static/ on startup
+watch = true     # keep watching and gzip files as they change
 ```
 
 you don't have to copy it from here, it's generated if it doesn't exist
@@ -135,3 +137,18 @@ standard. examples of valid and invalid dates:
 - `GET /posts/<name>`: view a post
 - `GET /posts/<name>.md`: view the raw markdown of a post
 - `GET /post/*`: redirects to `/posts/*`
+
+## Cache
+
+bingus-blog caches every post retrieved and keeps it permanently in cache.
+the only way a cache entry is removed is when it's requested and it does
+not exist in the filesystem. cache entries don't expire, but they get
+invalidated when the mtime of the markdown file changes.
+
+if cache persistence is on, the cache is compressed & written on shutdown,
+and read & decompressed on startup. one may opt to set the cache location
+to point to a tmpfs so it saves and loads really fast, but it doesn't persist
+across boots, also at the cost of even more RAM usage.
+
+the compression reduced a 3.21 MB file cache into 0.18 MB with almost instantly.
+there is basically no good reason to not have compression on.

@@ -1,16 +1,15 @@
 #![feature(let_chains, stmt_expr_attributes, proc_macro_hygiene)]
 
-mod append_path;
-mod compress;
 mod config;
 mod error;
 mod filters;
 mod hash_arc_store;
 mod markdown_render;
 mod post;
-mod watcher;
+mod ranged_i128_visitor;
 
 use std::future::IntoFuture;
+use std::io::Read;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
@@ -35,11 +34,9 @@ use tracing::level_filters::LevelFilter;
 use tracing::{error, info, info_span, warn, Span};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::compress::compress_epicly;
 use crate::config::Config;
 use crate::error::PostError;
 use crate::post::{PostManager, PostMetadata, RenderStats};
-use crate::watcher::watch;
 
 type ArcState = Arc<AppState>;
 
@@ -158,53 +155,38 @@ async fn main() -> eyre::Result<()> {
     let mut tasks = JoinSet::new();
     let mut cancellation_tokens = Vec::new();
 
-    #[cfg(feature = "precompression")]
-    if config.precompression.enable {
-        let span = info_span!("compression");
-        info!(parent: span.clone(), "compressing static");
-
-        let compressed = tokio::task::spawn_blocking(|| compress_epicly("static"))
-            .await
-            .unwrap()
-            .context("couldn't compress static")?;
-
-        let _handle = span.enter();
-
-        if compressed > 0 {
-            info!(compressed_files=%compressed, "compressed {compressed} files");
-        }
-
-        if config.precompression.watch {
-            info!("starting compressor task");
-            let span = span.clone();
-            let token = CancellationToken::new();
-            let passed_token = token.clone();
-            tasks.spawn(async move {
-                watch(span, passed_token, Default::default())
-                    .await
-                    .context("failed to watch static")
-                    .unwrap()
-            });
-            cancellation_tokens.push(token);
-        }
-    }
-
     let posts = if config.cache.enable {
-        if let Some(path) = config.cache.persistence.as_ref()
-            && tokio::fs::try_exists(&path)
+        if config.cache.persistence
+            && tokio::fs::try_exists(&config.cache.file)
                 .await
-                .with_context(|| format!("failed to check if {} exists", path.display()))?
+                .with_context(|| {
+                    format!("failed to check if {} exists", config.cache.file.display())
+                })?
         {
             info!("loading cache from file");
+            let path = &config.cache.file;
             let load_cache = async {
                 let mut cache_file = tokio::fs::File::open(&path)
                     .await
                     .context("failed to open cache file")?;
-                let mut serialized = Vec::with_capacity(4096);
-                cache_file
-                    .read_to_end(&mut serialized)
+                let serialized = if config.cache.compress {
+                    let cache_file = cache_file.into_std().await;
+                    tokio::task::spawn_blocking(move || {
+                        let mut buf = Vec::with_capacity(4096);
+                        zstd::stream::read::Decoder::new(cache_file)?.read_to_end(&mut buf)?;
+                        Ok::<_, std::io::Error>(buf)
+                    })
                     .await
-                    .context("failed to read cache file")?;
+                    .context("failed to join blocking thread")?
+                    .context("failed to read cache file")?
+                } else {
+                    let mut buf = Vec::with_capacity(4096);
+                    cache_file
+                        .read_to_end(&mut buf)
+                        .await
+                        .context("failed to read cache file")?;
+                    buf
+                };
                 let cache =
                     bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")?;
                 Ok::<PostManager, color_eyre::Report>(PostManager::new_with_cache(
@@ -219,7 +201,11 @@ async fn main() -> eyre::Result<()> {
                 Err(err) => {
                     error!("failed to load cache: {}", err);
                     info!("using empty cache");
-                    PostManager::new(config.posts_dir.clone(), config.render.clone())
+                    PostManager::new_with_cache(
+                        config.posts_dir.clone(),
+                        config.render.clone(),
+                        Default::default(),
+                    )
                 }
             }
         } else {
@@ -330,19 +316,28 @@ async fn main() -> eyre::Result<()> {
             AppState::clone(state.as_ref())
         });
         if config.cache.enable
-            && let Some(path) = config.cache.persistence.as_ref()
+            && config.cache.persistence
+            && let Some(cache) = posts.into_cache()
         {
-            let cache = posts
-                .into_cache()
-                .unwrap_or_else(|| unreachable!("cache should always exist in this state"));
-            let mut serialized = bitcode::serialize(&cache).context("failed to serialize cache")?;
+            let path = &config.cache.file;
+            let serialized = bitcode::serialize(&cache).context("failed to serialize cache")?;
             let mut cache_file = tokio::fs::File::create(path)
                 .await
                 .with_context(|| format!("failed to open cache at {}", path.display()))?;
-            cache_file
-                .write_all(serialized.as_mut_slice())
+            if config.cache.compress {
+                let cache_file = cache_file.into_std().await;
+                tokio::task::spawn_blocking(move || {
+                    std::io::Write::write_all(
+                        &mut zstd::stream::write::Encoder::new(cache_file, 3)?.auto_finish(),
+                        &serialized,
+                    )
+                })
                 .await
-                .context("failed to write cache to file")?;
+                .context("failed to join blocking thread")?
+            } else {
+                cache_file.write_all(&serialized).await
+            }
+            .context("failed to write cache to file")?;
             info!("wrote cache to {}", path.display());
         }
         Ok::<(), color_eyre::Report>(())

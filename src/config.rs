@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{error, info};
 
+use crate::ranged_i128_visitor::RangedI128Visitor;
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(default)]
 pub struct SyntectConfig {
@@ -23,19 +25,15 @@ pub struct RenderConfig {
     pub syntect: SyntectConfig,
 }
 
-#[cfg(feature = "precompression")]
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(default)]
-pub struct PrecompressionConfig {
-    pub enable: bool,
-    pub watch: bool,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct CacheConfig {
     pub enable: bool,
-    pub persistence: Option<PathBuf>,
+    pub persistence: bool,
+    pub file: PathBuf,
+    pub compress: bool,
+    #[serde(deserialize_with = "check_zstd_level_bounds")]
+    pub compression_level: i32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -47,8 +45,6 @@ pub struct Config {
     pub description: String,
     pub posts_dir: PathBuf,
     pub render: RenderConfig,
-    #[cfg(feature = "precompression")]
-    pub precompression: PrecompressionConfig,
     pub cache: CacheConfig,
     pub markdown_access: bool,
 }
@@ -62,8 +58,6 @@ impl Default for Config {
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
             render: Default::default(),
             posts_dir: "posts".into(),
-            #[cfg(feature = "precompression")]
-            precompression: Default::default(),
             cache: Default::default(),
             markdown_access: true,
         }
@@ -80,21 +74,14 @@ impl Default for SyntectConfig {
     }
 }
 
-#[cfg(feature = "precompression")]
-impl Default for PrecompressionConfig {
-    fn default() -> Self {
-        Self {
-            enable: false,
-            watch: true,
-        }
-    }
-}
-
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enable: true,
-            persistence: None,
+            persistence: false,
+            file: "cache".into(),
+            compress: true,
+            compression_level: 3,
         }
     }
 }
@@ -142,4 +129,12 @@ pub async fn load() -> Result<Config> {
             _ => bail!("couldn't open config file: {}", err),
         },
     }
+}
+
+fn check_zstd_level_bounds<'de, D>(d: D) -> Result<i32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    d.deserialize_i32(RangedI128Visitor::<1, 22>)
+        .map(|x| x as i32)
 }
