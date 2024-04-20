@@ -335,7 +335,11 @@ async fn main() -> eyre::Result<()> {
                 let cache_file = cache_file.into_std().await;
                 tokio::task::spawn_blocking(move || {
                     std::io::Write::write_all(
-                        &mut zstd::stream::write::Encoder::new(cache_file, 3)?.auto_finish(),
+                        &mut zstd::stream::write::Encoder::new(
+                            cache_file,
+                            config.cache.compression_level,
+                        )?
+                        .auto_finish(),
                         &serialized,
                     )
                 })
