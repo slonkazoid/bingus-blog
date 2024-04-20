@@ -75,7 +75,7 @@ pub enum RenderStats {
 #[derive(Clone)]
 pub struct PostManager {
     dir: PathBuf,
-    cache: Cache,
+    cache: Option<Cache>,
     config: RenderConfig,
 }
 
@@ -83,13 +83,17 @@ impl PostManager {
     pub fn new(dir: PathBuf, config: RenderConfig) -> PostManager {
         PostManager {
             dir,
-            cache: Default::default(),
+            cache: None,
             config,
         }
     }
 
     pub fn new_with_cache(dir: PathBuf, config: RenderConfig, cache: Cache) -> PostManager {
-        PostManager { dir, cache, config }
+        PostManager {
+            dir,
+            cache: Some(cache),
+            config,
+        }
     }
 
     async fn parse_and_render(
@@ -125,19 +129,21 @@ impl PostManager {
         .render()?;
         let rendering = before_render.elapsed();
 
-        self.cache
-            .insert(
-                name.to_string(),
-                metadata.clone(),
-                modified
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-                post.clone(),
-                &self.config,
-            )
-            .await
-            .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0));
+        if let Some(cache) = self.cache.as_ref() {
+            cache
+                .insert(
+                    name.to_string(),
+                    metadata.clone(),
+                    modified
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                    post.clone(),
+                    &self.config,
+                )
+                .await
+                .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0))
+        };
 
         Ok((metadata, post, (parsing, rendering)))
     }
@@ -166,7 +172,9 @@ impl PostManager {
                     .to_string_lossy()
                     .to_string();
 
-                if let Some(hit) = self.cache.lookup_metadata(&name, mtime).await {
+                if let Some(cache) = self.cache.as_ref()
+                    && let Some(hit) = cache.lookup_metadata(&name, mtime).await
+                {
                     posts.push(hit)
                 } else if let Ok((metadata, ..)) = self.parse_and_render(name, path).await {
                     posts.push(metadata);
@@ -194,7 +202,9 @@ impl PostManager {
             Ok(value) => value,
             Err(err) => match err.kind() {
                 io::ErrorKind::NotFound => {
-                    self.cache.remove(name).await;
+                    if let Some(cache) = self.cache.as_ref() {
+                        cache.remove(name).await;
+                    }
                     return Err(PostError::NotFound(name.to_string()));
                 }
                 _ => return Err(PostError::IoError(err)),
@@ -206,7 +216,9 @@ impl PostManager {
             .unwrap()
             .as_secs();
 
-        if let Some(hit) = self.cache.lookup(name, mtime, &self.config).await {
+        if let Some(cache) = self.cache.as_ref()
+            && let Some(hit) = cache.lookup(name, mtime, &self.config).await
+        {
             Ok((
                 hit.metadata,
                 hit.rendered,
@@ -222,7 +234,7 @@ impl PostManager {
         }
     }
 
-    pub fn into_cache(self) -> Cache {
+    pub fn into_cache(self) -> Option<Cache> {
         self.cache
     }
 }

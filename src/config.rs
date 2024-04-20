@@ -10,13 +10,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{error, info};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[serde(default)]
 pub struct SyntectConfig {
     pub load_defaults: bool,
     pub themes_dir: Option<PathBuf>,
     pub theme: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[serde(default)]
 pub struct RenderConfig {
     pub syntect: SyntectConfig,
@@ -32,6 +33,13 @@ pub struct PrecompressionConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
+pub struct CacheConfig {
+    pub enable: bool,
+    pub persistence: Option<PathBuf>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
 pub struct Config {
     pub host: IpAddr,
     pub port: u16,
@@ -41,7 +49,7 @@ pub struct Config {
     pub render: RenderConfig,
     #[cfg(feature = "precompression")]
     pub precompression: PrecompressionConfig,
-    pub cache_file: Option<PathBuf>,
+    pub cache: CacheConfig,
     pub markdown_access: bool,
 }
 
@@ -56,20 +64,18 @@ impl Default for Config {
             posts_dir: "posts".into(),
             #[cfg(feature = "precompression")]
             precompression: Default::default(),
-            cache_file: None,
+            cache: Default::default(),
             markdown_access: true,
         }
     }
 }
 
-impl Default for RenderConfig {
+impl Default for SyntectConfig {
     fn default() -> Self {
         Self {
-            syntect: SyntectConfig {
-                load_defaults: false,
-                themes_dir: Some("themes".into()),
-                theme: Some("Catppuccin Mocha".into()),
-            },
+            load_defaults: false,
+            themes_dir: Some("themes".into()),
+            theme: Some("Catppuccin Mocha".into()),
         }
     }
 }
@@ -80,6 +86,15 @@ impl Default for PrecompressionConfig {
         Self {
             enable: false,
             watch: true,
+        }
+    }
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            persistence: None,
         }
     }
 }

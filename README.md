@@ -38,11 +38,15 @@ port = 3000 # port to listen on
 title = "bingus-blog" # title of the website
 description = "blazingly fast markdown blog software written in rust memory safe" # description of the website
 posts_dir = "posts" # where posts are stored
-#cache_file = "..." # file to serialize the cache into on shutdown, and
-                    # to deserialize from on startup. uncomment to enable
 markdown_access = true # allow users to see the raw markdown of a post
 
-[render] # rendering-specific settings
+[cache] # cache settings
+enable = true # save metadata and rendered posts into RAM
+              # highly recommended, only turn off if asolutely necessary
+#persistence = "..." # file to save the cache to on shutdown, and
+                     # to load from on startup. uncomment to enable
+
+[render] # post rendering settings
 syntect.load_defaults = false # include default syntect themes
 syntect.themes_dir = "themes" # directory to include themes from
 syntect.theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)

@@ -189,37 +189,45 @@ async fn main() -> eyre::Result<()> {
         }
     }
 
-    let posts = if let Some(path) = config.cache_file.as_ref()
-        && tokio::fs::try_exists(&path)
-            .await
-            .with_context(|| format!("failed to check if {} exists", path.display()))?
-    {
-        info!("loading cache from file");
-        let load_cache = async {
-            let mut cache_file = tokio::fs::File::open(&path)
+    let posts = if config.cache.enable {
+        if let Some(path) = config.cache.persistence.as_ref()
+            && tokio::fs::try_exists(&path)
                 .await
-                .context("failed to open cache file")?;
-            let mut serialized = Vec::with_capacity(4096);
-            cache_file
-                .read_to_end(&mut serialized)
-                .await
-                .context("failed to read cache file")?;
-            let cache =
-                bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")?;
-            Ok::<PostManager, color_eyre::Report>(PostManager::new_with_cache(
+                .with_context(|| format!("failed to check if {} exists", path.display()))?
+        {
+            info!("loading cache from file");
+            let load_cache = async {
+                let mut cache_file = tokio::fs::File::open(&path)
+                    .await
+                    .context("failed to open cache file")?;
+                let mut serialized = Vec::with_capacity(4096);
+                cache_file
+                    .read_to_end(&mut serialized)
+                    .await
+                    .context("failed to read cache file")?;
+                let cache =
+                    bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")?;
+                Ok::<PostManager, color_eyre::Report>(PostManager::new_with_cache(
+                    config.posts_dir.clone(),
+                    config.render.clone(),
+                    cache,
+                ))
+            }
+            .await;
+            match load_cache {
+                Ok(posts) => posts,
+                Err(err) => {
+                    error!("failed to load cache: {}", err);
+                    info!("using empty cache");
+                    PostManager::new(config.posts_dir.clone(), config.render.clone())
+                }
+            }
+        } else {
+            PostManager::new_with_cache(
                 config.posts_dir.clone(),
                 config.render.clone(),
-                cache,
-            ))
-        }
-        .await;
-        match load_cache {
-            Ok(posts) => posts,
-            Err(err) => {
-                error!("failed to load cache: {}", err);
-                info!("using empty cache");
-                PostManager::new(config.posts_dir.clone(), config.render.clone())
-            }
+                Default::default(),
+            )
         }
     } else {
         PostManager::new(config.posts_dir.clone(), config.render.clone())
@@ -321,8 +329,12 @@ async fn main() -> eyre::Result<()> {
             warn!("couldn't unwrap Arc over AppState, more than one strong reference exists for Arc. cloning instead");
             AppState::clone(state.as_ref())
         });
-        if let Some(path) = config.cache_file.as_ref() {
-            let cache = posts.into_cache();
+        if config.cache.enable
+            && let Some(path) = config.cache.persistence.as_ref()
+        {
+            let cache = posts
+                .into_cache()
+                .unwrap_or_else(|| unreachable!("cache should always exist in this state"));
             let mut serialized = bitcode::serialize(&cache).context("failed to serialize cache")?;
             let mut cache_file = tokio::fs::File::create(path)
                 .await
