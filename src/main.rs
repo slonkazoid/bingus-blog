@@ -63,12 +63,19 @@ struct ViewPostTemplate {
     markdown_access: bool,
 }
 
-type AppResult<T> = Result<T, PostError>;
+type AppResult<T> = Result<T, AppError>;
 
 #[derive(Error, Debug)]
 enum AppError {
     #[error("failed to fetch post: {0}")]
     PostError(#[from] PostError),
+}
+
+impl From<std::io::Error> for AppError {
+    #[inline(always)]
+    fn from(value: std::io::Error) -> Self {
+        Self::PostError(PostError::IoError(value))
+    }
 }
 
 #[derive(Template)]
