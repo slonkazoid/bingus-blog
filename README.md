@@ -119,7 +119,7 @@ standard. examples of valid and invalid dates:
 ```diff
 + 2024-04-18T01:15:26Z      # valid
 + 2024-04-18T04:15:26+03:00 # valid (with timezone)
-- 2024-04-18T04:15:26Z      # invalid (missing Z)
+- 2024-04-18T04:15:26       # invalid (missing Z)
 - 2024-04-18T04:15Z         # invalid (missing seconds)
 -                           # everything else is also invalid
 ```
