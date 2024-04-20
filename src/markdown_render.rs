@@ -32,7 +32,7 @@ fn build_syntect(config: &RenderConfig) -> Arc<SyntectAdapter> {
     Arc::new(builder.build())
 }
 
-pub fn render(markdown: &str, config: &RenderConfig, front_matter: bool) -> String {
+pub fn render(markdown: &str, config: &RenderConfig) -> String {
     let mut options = ComrakOptions::default();
     options.extension.table = true;
     options.extension.autolink = true;
@@ -41,9 +41,6 @@ pub fn render(markdown: &str, config: &RenderConfig, front_matter: bool) -> Stri
     options.extension.strikethrough = true;
     options.extension.multiline_block_quotes = true;
     options.extension.header_ids = Some(String::new());
-    if front_matter {
-        options.extension.front_matter_delimiter = Some(String::from("---"));
-    };
 
     let mut render_plugins = RenderPlugins::default();
     let syntect = syntect_adapter(config);

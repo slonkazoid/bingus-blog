@@ -121,7 +121,7 @@ impl PostManager {
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let rendered_markdown = render(body, &self.config, false);
+        let rendered_markdown = render(body, &self.config);
         let post = Post {
             meta: &metadata,
             rendered_markdown,
@@ -148,13 +148,10 @@ impl PostManager {
         Ok((metadata, post, (parsing, rendering)))
     }
 
-    async fn list_posts_recursive(
-        &self,
-        dir: impl AsRef<Path>,
-    ) -> Result<Vec<PostMetadata>, PostError> {
+    pub async fn list_posts(&self) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = Vec::new();
 
-        let mut read_dir = fs::read_dir(dir).await?;
+        let mut read_dir = fs::read_dir(&self.dir).await?;
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
             let stat = fs::metadata(&path).await?;
@@ -183,11 +180,6 @@ impl PostManager {
         }
 
         Ok(posts)
-    }
-
-    #[allow(unused)]
-    pub async fn list_posts(&self) -> Result<Vec<PostMetadata>, PostError> {
-        self.list_posts_recursive(&self.dir).await
     }
 
     // third entry in the tuple is whether it got rendered and if so, how long did it take

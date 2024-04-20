@@ -23,27 +23,13 @@ where
         }
     }
 
-    /*pub fn get(&self, key: &Lookup) -> Option<Arc<T>> {
-        self.hash.and_then(|hash| {
-            let mut h = DefaultHasher::new();
-            key.hash(&mut h);
-            if hash == h.finish() {
-                self.inner.clone()
-            } else {
-                None
-            }
-        })
-    }*/
-
     pub fn get_or_init(&mut self, key: &Lookup, init: impl Fn(&Lookup) -> Arc<T>) -> Arc<T> {
         let mut h = DefaultHasher::new();
         key.hash(&mut h);
         let hash = h.finish();
         if !self.hash.is_some_and(|inner_hash| inner_hash == hash) {
-            let mut h = DefaultHasher::new();
-            key.hash(&mut h);
             self.inner = Some(init(key));
-            self.hash = Some(h.finish());
+            self.hash = Some(hash);
         }
         // safety: please.
         unsafe { self.inner.as_ref().unwrap_unchecked().clone() }
