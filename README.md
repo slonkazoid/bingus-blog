@@ -52,10 +52,6 @@ compression_level = 3 # zstd compression level, 3 is recommended
 syntect.load_defaults = false      # include default syntect themes
 syntect.themes_dir = "themes"      # directory to include themes from
 syntect.theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)
-
-[precompression] # precompression settings
-enable = false   # gzip every file in static/ on startup
-watch = true     # keep watching and gzip files as they change
 ```
 
 you don't have to copy it from here, it's generated if it doesn't exist
