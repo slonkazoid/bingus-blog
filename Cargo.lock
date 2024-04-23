@@ -364,7 +364,6 @@ dependencies = [
  "axum 0.7.5",
  "bitcode",
  "chrono",
- "clap",
  "color-eyre",
  "comrak",
  "console-subscriber",
