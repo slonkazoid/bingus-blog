@@ -16,7 +16,6 @@ blazingly fast markdown blog software written in rust memory safe
 - [x] document config
 - [ ] extend syntect options
 - [ ] general cleanup of code
-- [ ] make `compress.rs` not suck
 - [ ] better error reporting and pages
 - [ ] better tracing
 - [ ] cache cleanup task
