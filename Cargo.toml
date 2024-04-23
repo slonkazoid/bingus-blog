@@ -5,9 +5,8 @@ edition = "2021"
 default-run = "bingus-blog"
 
 [features]
-default = ["precompression"]
+default = []
 tokio-console = ["dep:console-subscriber"]
-precompression = ["dep:async-compression"]
 
 [profile.release]
 lto = "fat"
@@ -18,7 +17,6 @@ strip = true
 [dependencies]
 askama = { version = "0.12.1", features = ["with-axum"] }
 askama_axum = "0.4.0"
-async-compression = { version = "0.4.8", optional = true }
 axum = { version = "0.7.5", features = ["macros"] }
 bitcode = { version = "0.6.0", features = ["serde"] }
 chrono = { version = "0.4.37", features = ["serde"] }

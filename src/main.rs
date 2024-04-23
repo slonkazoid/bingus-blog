@@ -1,4 +1,4 @@
-#![feature(let_chains, stmt_expr_attributes, proc_macro_hygiene)]
+#![feature(let_chains)]
 
 mod config;
 mod error;

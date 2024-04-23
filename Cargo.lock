@@ -360,7 +360,6 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "askama_axum",
- "async-compression",
  "axum 0.7.5",
  "bitcode",
  "chrono",
