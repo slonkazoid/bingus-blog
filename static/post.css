@@ -26,8 +26,8 @@ pre > code {
 	padding: 1.25em 1.5em;
 	display: block;
 
-	background-color: var(--base);
-	color: var(--text);
+	background-color: unset;
+	color: unset;
 }
 
 img {
