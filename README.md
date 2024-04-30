@@ -63,10 +63,13 @@ you don't have to copy it from here, it's generated if it doesn't exist
 
 ## Usage
 
+this project uses nightly-only features.
+make sure you have the nightly toolchain installed.
+
 build the application with `cargo`:
 
 ```sh
-cargo build --release
+cargo +nightly build --release
 ```
 
 the executable will be located at `target/release/bingus-blog`.
@@ -82,7 +85,7 @@ building for `aarch64-unknown-linux-musl` (for example, a Redmi 5 Plus running p
 sudo pacman -S aarch64-linux-gnu-gcc
 export CC=aarch64-linux-gnu-gcc
 export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=$CC
-cargo build --release --target=aarch64-unknown-linux-musl
+cargo +nightly build --release --target=aarch64-unknown-linux-musl
 ```
 
 your executable will be located at `target/<target>/release/bingus-blog` this time.
