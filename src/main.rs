@@ -1,4 +1,4 @@
-#![feature(let_chains, if_let_guard)]
+#![feature(let_chains)]
 
 mod config;
 mod error;
