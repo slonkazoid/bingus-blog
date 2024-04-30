@@ -16,13 +16,16 @@ blazingly fast markdown blog software written in rust memory safe
 - [x] document config
 - [ ] extend syntect options
 - [ ] general cleanup of code
-- [ ] better error reporting and pages
+- [ ] better error reporting and error pages
 - [ ] better tracing
 - [ ] cache cleanup task
+- [ ] ^ replace HashMap with HashCache once i implement [this](https://github.com/wvwwvwwv/scalable-concurrent-containers/issues/139)
 - [x] (de)compress cache with zstd on startup/shutdown
 - [ ] make date parsing less strict
 - [ ] make date formatting better
+- [ ] date formatting respects user timezone
 - [ ] clean up imports and require less features
+- [ ] improve home page
 - [x] be blazingly fast
 - [x] 100+ MiB binary size
 
