@@ -15,6 +15,7 @@ use tracing::warn;
 use crate::config::RenderConfig;
 use crate::markdown_render::render;
 use crate::post::cache::Cache;
+use crate::systemtime_as_secs::as_secs;
 use crate::PostError;
 
 #[derive(Deserialize)]
@@ -134,10 +135,7 @@ impl PostManager {
                 .insert(
                     name.to_string(),
                     metadata.clone(),
-                    modified
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    as_secs(&modified),
                     post.clone(),
                     &self.config,
                 )
@@ -157,11 +155,8 @@ impl PostManager {
             let stat = fs::metadata(&path).await?;
 
             if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
-                let mtime = stat
-                    .modified()?
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
+                let mtime = as_secs(&stat.modified()?);
+                // TODO. this?
                 let name = path
                     .clone()
                     .file_stem()
@@ -202,11 +197,7 @@ impl PostManager {
                 _ => return Err(PostError::IoError(err)),
             },
         };
-        let mtime = stat
-            .modified()?
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let mtime = as_secs(&stat.modified()?);
 
         if let Some(cache) = self.cache.as_ref()
             && let Some(hit) = cache.lookup(name, mtime, &self.config).await
@@ -228,5 +219,18 @@ impl PostManager {
 
     pub fn into_cache(self) -> Option<Cache> {
         self.cache
+    }
+
+    pub async fn cleanup(&self) {
+        if let Some(cache) = self.cache.as_ref() {
+            cache
+                .cleanup(|name| {
+                    std::fs::metadata(self.dir.join(name.to_owned() + ".md"))
+                        .ok()
+                        .and_then(|metadata| metadata.modified().ok())
+                        .map(|mtime| as_secs(&mtime))
+                })
+                .await
+        }
     }
 }

@@ -2,6 +2,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use scc::HashMap;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::config::RenderConfig;
 use crate::post::PostMetadata;
@@ -94,5 +95,26 @@ impl Cache {
 
     pub async fn remove(&self, name: &str) -> Option<(String, CacheValue)> {
         self.0.remove_async(name).await
+    }
+
+    #[instrument(name = "cleanup", skip_all)]
+    pub async fn cleanup(&self, get_mtime: impl Fn(&str) -> Option<u64>) {
+        let old_size = self.0.len();
+        let mut i = 0;
+
+        self.0
+            .retain_async(|k, v| {
+                if get_mtime(k).is_some_and(|mtime| mtime == v.mtime) {
+                    true
+                } else {
+                    tracing::debug!("removing {k} from cache");
+                    i += 1;
+                    false
+                }
+            })
+            .await;
+
+        let new_size = self.0.len();
+        tracing::debug!("removed {i} entries ({old_size} -> {new_size} entries)");
     }
 }

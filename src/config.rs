@@ -29,6 +29,8 @@ pub struct RenderConfig {
 #[serde(default)]
 pub struct CacheConfig {
     pub enable: bool,
+    pub cleanup: bool,
+    pub cleanup_interval: Option<u64>,
     pub persistence: bool,
     pub file: PathBuf,
     pub compress: bool,
@@ -78,7 +80,9 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enable: true,
-            persistence: false,
+            cleanup: true,
+            cleanup_interval: None,
+            persistence: true,
             file: "cache".into(),
             compress: true,
             compression_level: 3,

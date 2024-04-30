@@ -1,4 +1,4 @@
-#![feature(let_chains)]
+#![feature(let_chains, if_let_guard)]
 
 mod config;
 mod error;
@@ -7,6 +7,7 @@ mod hash_arc_store;
 mod markdown_render;
 mod post;
 mod ranged_i128_visitor;
+mod systemtime_as_secs;
 
 use std::future::IntoFuture;
 use std::io::Read;
@@ -25,13 +26,13 @@ use color_eyre::eyre::{self, Context};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tokio::signal;
 use tokio::task::JoinSet;
+use tokio::{select, signal};
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::level_filters::LevelFilter;
-use tracing::{error, info, info_span, warn, Span};
+use tracing::{debug, error, info, info_span, warn, Span};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::config::Config;
@@ -160,7 +161,7 @@ async fn main() -> eyre::Result<()> {
         .context("couldn't load configuration")?;
 
     let mut tasks = JoinSet::new();
-    let mut cancellation_tokens = Vec::new();
+    let cancellation_token = CancellationToken::new();
 
     let posts = if config.cache.enable {
         if config.cache.persistence
@@ -228,6 +229,27 @@ async fn main() -> eyre::Result<()> {
 
     let state = Arc::new(AppState { config, posts });
 
+    if state.config.cache.enable && state.config.cache.cleanup {
+        if let Some(t) = state.config.cache.cleanup_interval {
+            let state = Arc::clone(&state);
+            let token = cancellation_token.child_token();
+            debug!("setting up cleanup task");
+            tasks.spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_millis(t));
+                loop {
+                    select! {
+                        _ = token.cancelled() => break,
+                        _ = interval.tick() => {
+                            state.posts.cleanup().await
+                        }
+                    }
+                }
+            });
+        } else {
+            state.posts.cleanup().await;
+        }
+    }
+
     let app = Router::new()
         .route("/", get(index))
         .route(
@@ -285,8 +307,7 @@ async fn main() -> eyre::Result<()> {
     #[cfg(not(unix))] // TODO: kill all windows server users
     let sigterm = std::future::pending::<()>();
 
-    let axum_token = CancellationToken::new();
-    cancellation_tokens.push(axum_token.clone());
+    let axum_token = cancellation_token.child_token();
 
     let mut server = axum::serve(
         listener,
@@ -309,9 +330,7 @@ async fn main() -> eyre::Result<()> {
 
     let cleanup = async move {
         // stop tasks
-        for token in cancellation_tokens {
-            token.cancel();
-        }
+        cancellation_token.cancel();
         server.await.context("failed to serve app")?;
         while let Some(task) = tasks.join_next().await {
             task.context("failed to join task")?;
@@ -320,6 +339,8 @@ async fn main() -> eyre::Result<()> {
         // write cache to file
         let AppState { config, posts } = Arc::<AppState>::try_unwrap(state).unwrap_or_else(|state| {
             warn!("couldn't unwrap Arc over AppState, more than one strong reference exists for Arc. cloning instead");
+            // TODO: only do this when persistence is enabled
+            //       first check config from inside the arc, then try unwrap
             AppState::clone(state.as_ref())
         });
         if config.cache.enable

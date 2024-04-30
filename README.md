@@ -18,7 +18,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [ ] general cleanup of code
 - [ ] better error reporting and error pages
 - [ ] better tracing
-- [ ] cache cleanup task
+- [x] cache cleanup task
 - [ ] ^ replace HashMap with HashCache once i implement [this](https://github.com/wvwwvwwv/scalable-concurrent-containers/issues/139)
 - [x] (de)compress cache with zstd on startup/shutdown
 - [ ] make date parsing less strict
@@ -45,7 +45,10 @@ markdown_access = true # allow users to see the raw markdown of a post
 [cache] # cache settings
 enable = true # save metadata and rendered posts into RAM
               # highly recommended, only turn off if absolutely necessary
-persistence = false   # save the cache to on shutdown and load on startup
+cleanup = true        # clean cache, highly recommended
+#cleanup_interval = 86400000 # clean the cache regularly instead of just at startu
+                      # uncomment to enable
+persistence = true    # save the cache to on shutdown and load on startup
 file = "cache"        # file to save the cache to
 compress = true       # compress the cache file
 compression_level = 3 # zstd compression level, 3 is recommended
