@@ -1,9 +1,10 @@
 use std::fmt::Display;
 
-use axum::{http::StatusCode, response::IntoResponse};
+use askama_axum::Template;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use thiserror::Error;
 
-// fronma is too lazy to implement std::error::Error for their own types
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct FronmaError(fronma::error::Error);
@@ -43,5 +44,45 @@ impl From<fronma::error::Error> for PostError {
 impl IntoResponse for PostError {
     fn into_response(self) -> axum::response::Response {
         (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()).into_response()
+    }
+}
+
+pub type AppResult<T> = Result<T, AppError>;
+
+#[derive(Error, Debug)]
+pub enum AppError {
+    #[error("failed to fetch post: {0}")]
+    PostError(#[from] PostError),
+}
+
+impl From<std::io::Error> for AppError {
+    #[inline(always)]
+    fn from(value: std::io::Error) -> Self {
+        Self::PostError(PostError::IoError(value))
+    }
+}
+
+#[derive(Template)]
+#[template(path = "error.html")]
+struct ErrorTemplate {
+    error: String,
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let status_code = match &self {
+            AppError::PostError(err) => match err {
+                PostError::NotFound(_) => StatusCode::NOT_FOUND,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            },
+            //_ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        (
+            status_code,
+            ErrorTemplate {
+                error: self.to_string(),
+            },
+        )
+            .into_response()
     }
 }

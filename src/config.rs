@@ -1,8 +1,6 @@
-use std::{
-    env,
-    net::{IpAddr, Ipv4Addr},
-    path::PathBuf,
-};
+use std::env;
+use std::net::{IpAddr, Ipv4Addr};
+use std::path::PathBuf;
 
 use color_eyre::eyre::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -40,28 +38,60 @@ pub struct CacheConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
-pub struct Config {
+pub struct HttpConfig {
     pub host: IpAddr,
     pub port: u16,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct DirsConfig {
+    pub posts: PathBuf,
+    pub media: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct Config {
     pub title: String,
     pub description: String,
-    pub posts_dir: PathBuf,
+    pub raw_access: bool,
+    pub num_posts: usize,
+    pub dirs: DirsConfig,
+    pub http: HttpConfig,
     pub render: RenderConfig,
     pub cache: CacheConfig,
-    pub markdown_access: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-            port: 3000,
             title: "bingus-blog".into(),
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
+            raw_access: true,
+            num_posts: 5,
+            dirs: Default::default(),
+            http: Default::default(),
             render: Default::default(),
-            posts_dir: "posts".into(),
             cache: Default::default(),
-            markdown_access: true,
+        }
+    }
+}
+
+impl Default for DirsConfig {
+    fn default() -> Self {
+        Self {
+            posts: "posts".into(),
+            media: "media".into(),
+        }
+    }
+}
+
+impl Default for HttpConfig {
+    fn default() -> Self {
+        Self {
+            host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            port: 3000,
         }
     }
 }

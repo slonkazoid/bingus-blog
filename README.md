@@ -26,7 +26,8 @@ blazingly fast markdown blog software written in rust memory safe
 - [ ] date formatting respects user timezone
 - [ ] clean up imports and require less features
 - [ ] improve home page
-- [ ] tags
+- [x] tags (backend)
+- [ ] tags (frontend)
 - [x] be blazingly fast
 - [x] 100+ MiB binary size
 
@@ -35,26 +36,30 @@ blazingly fast markdown blog software written in rust memory safe
 the default configuration with comments looks like this
 
 ```toml
-# main settings
-host = "0.0.0.0"       # ip to listen on
-port = 3000            # port to listen on
 title = "bingus-blog"  # title of the website
 description = "blazingly fast markdown blog software written in rust memory safe" # description of the website
-posts_dir = "posts"    # where posts are stored
-markdown_access = true # allow users to see the raw markdown of a post
+raw_access = true      # allow users to see the raw markdown of a post
 
-[cache] # cache settings
-enable = true # save metadata and rendered posts into RAM
-              # highly recommended, only turn off if absolutely necessary
-cleanup = true        # clean cache, highly recommended
-#cleanup_interval = 86400000 # clean the cache regularly instead of just at startu
-                      # uncomment to enable
-persistence = true    # save the cache to on shutdown and load on startup
-file = "cache"        # file to save the cache to
-compress = true       # compress the cache file
-compression_level = 3 # zstd compression level, 3 is recommended
+[dirs]
+posts = "posts"        # where posts are stored
+media = "media"        # directory served under /media/
 
-[render] # post rendering settings
+[http]
+host = "0.0.0.0"       # ip to listen on
+port = 3000            # port to listen on
+
+[cache]
+enable = true          # save metadata and rendered posts into RAM
+                       # highly recommended, only turn off if absolutely necessary
+cleanup = true         # clean cache, highly recommended
+#cleanup_interval = 86400000 # clean the cache regularly instead of just at startup
+                       # uncomment to enable
+persistence = true     # save the cache to on shutdown and load on startup
+file = "cache"         # file to save the cache to
+compress = true        # compress the cache file
+compression_level = 3  # zstd compression level, 3 is recommended
+
+[render]
 syntect.load_defaults = false      # include default syntect themes
 syntect.themes_dir = "themes"      # directory to include themes from
 syntect.theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)

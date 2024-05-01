@@ -26,6 +26,8 @@ struct FrontMatter {
     pub icon: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 impl FrontMatter {
@@ -43,11 +45,12 @@ impl FrontMatter {
             icon: self.icon,
             created_at: self.created_at.or_else(|| created.map(|t| t.into())),
             modified_at: self.modified_at.or_else(|| modified.map(|t| t.into())),
+            tags: self.tags,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostMetadata {
     pub name: String,
     pub title: String,
@@ -56,6 +59,7 @@ pub struct PostMetadata {
     pub icon: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
+    pub tags: Vec<String>,
 }
 
 use crate::filters;
@@ -66,10 +70,10 @@ struct Post<'a> {
     pub rendered_markdown: String,
 }
 
-// format: TOTAL OP1 OP2
 #[allow(unused)]
 pub enum RenderStats {
     Cached(Duration),
+    // format: Total, Parsed in, Rendered in
     ParsedAndRendered(Duration, Duration, Duration),
 }
 
@@ -146,7 +150,10 @@ impl PostManager {
         Ok((metadata, post, (parsing, rendering)))
     }
 
-    pub async fn list_posts(&self) -> Result<Vec<PostMetadata>, PostError> {
+    pub async fn list_posts(
+        &self,
+        filter: impl Fn(&PostMetadata) -> bool,
+    ) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = Vec::new();
 
         let mut read_dir = fs::read_dir(&self.dir).await?;
@@ -166,10 +173,25 @@ impl PostManager {
 
                 if let Some(cache) = self.cache.as_ref()
                     && let Some(hit) = cache.lookup_metadata(&name, mtime).await
+                    && filter(&hit)
                 {
-                    posts.push(hit)
-                } else if let Ok((metadata, ..)) = self.parse_and_render(name, path).await {
-                    posts.push(metadata);
+                    posts.push(hit);
+                } else {
+                    match self.parse_and_render(name, path).await {
+                        Ok((metadata, ..)) => {
+                            if filter(&metadata) {
+                                posts.push(metadata);
+                            }
+                        }
+                        Err(err) => match err {
+                            PostError::IoError(ref io_err)
+                                if matches!(io_err.kind(), io::ErrorKind::NotFound) =>
+                            {
+                                warn!("TOCTOU: {}", err)
+                            }
+                            _ => return Err(err),
+                        },
+                    }
                 }
             }
         }
@@ -177,7 +199,24 @@ impl PostManager {
         Ok(posts)
     }
 
-    // third entry in the tuple is whether it got rendered and if so, how long did it take
+    pub async fn get_max_n_posts_with_optional_tag_sorted(
+        &self,
+        n: Option<usize>,
+        tag: Option<&String>,
+    ) -> Result<Vec<PostMetadata>, PostError> {
+        let mut posts = self
+            .list_posts(|metadata| !tag.is_some_and(|tag| !metadata.tags.contains(tag)))
+            .await?;
+        posts.sort_unstable_by_key(|metadata| metadata.created_at.unwrap_or_default());
+
+        if let Some(n) = n {
+            posts = Vec::from(&posts[posts.len().saturating_sub(n)..]);
+        }
+
+        posts.reverse();
+        Ok(posts)
+    }
+
     pub async fn get_post(
         &self,
         name: &str,

@@ -17,13 +17,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use askama_axum::Template;
-use axum::extract::{MatchedPath, Path, State};
-use axum::http::{Request, StatusCode};
+use axum::extract::{Path, Query, State};
+use axum::http::Request;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, Router};
 use axum::Json;
 use color_eyre::eyre::{self, Context};
-use thiserror::Error;
+use serde::Deserialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
@@ -36,7 +36,7 @@ use tracing::{debug, error, info, info_span, warn, Span};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::config::Config;
-use crate::error::PostError;
+use crate::error::{AppResult, PostError};
 use crate::post::{PostManager, PostMetadata, RenderStats};
 
 type ArcState = Arc<AppState>;
@@ -64,59 +64,46 @@ struct ViewPostTemplate {
     markdown_access: bool,
 }
 
-type AppResult<T> = Result<T, AppError>;
-
-#[derive(Error, Debug)]
-enum AppError {
-    #[error("failed to fetch post: {0}")]
-    PostError(#[from] PostError),
+#[derive(Deserialize)]
+struct QueryParams {
+    tag: Option<String>,
+    #[serde(rename = "n")]
+    num_posts: Option<usize>,
 }
 
-impl From<std::io::Error> for AppError {
-    #[inline(always)]
-    fn from(value: std::io::Error) -> Self {
-        Self::PostError(PostError::IoError(value))
-    }
-}
+async fn index(
+    State(state): State<ArcState>,
+    Query(query): Query<QueryParams>,
+) -> AppResult<IndexTemplate> {
+    let posts = state
+        .posts
+        .get_max_n_posts_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .await?;
 
-#[derive(Template)]
-#[template(path = "error.html")]
-struct ErrorTemplate {
-    error: String,
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let status_code = match &self {
-            AppError::PostError(err) => match err {
-                PostError::NotFound(_) => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            },
-            //_ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (
-            status_code,
-            ErrorTemplate {
-                error: self.to_string(),
-            },
-        )
-            .into_response()
-    }
-}
-
-async fn index(State(state): State<ArcState>) -> AppResult<IndexTemplate> {
     Ok(IndexTemplate {
         title: state.config.title.clone(),
         description: state.config.description.clone(),
-        posts: state.posts.list_posts().await?,
+        posts,
     })
 }
 
+async fn all_posts(
+    State(state): State<ArcState>,
+    Query(query): Query<QueryParams>,
+) -> AppResult<Json<Vec<PostMetadata>>> {
+    let posts = state
+        .posts
+        .get_max_n_posts_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .await?;
+
+    Ok(Json(posts))
+}
+
 async fn post(State(state): State<ArcState>, Path(name): Path<String>) -> AppResult<Response> {
-    if name.ends_with(".md") && state.config.markdown_access {
+    if name.ends_with(".md") && state.config.raw_access {
         let mut file = tokio::fs::OpenOptions::new()
             .read(true)
-            .open(state.config.posts_dir.join(&name))
+            .open(state.config.dirs.posts.join(&name))
             .await?;
 
         let mut buf = Vec::new();
@@ -129,16 +116,11 @@ async fn post(State(state): State<ArcState>, Path(name): Path<String>) -> AppRes
             meta: post.0,
             rendered: post.1,
             rendered_in: post.2,
-            markdown_access: state.config.markdown_access,
+            markdown_access: state.config.raw_access,
         };
 
         Ok(page.into_response())
     }
-}
-
-async fn all_posts(State(state): State<ArcState>) -> AppResult<Json<Vec<PostMetadata>>> {
-    let posts = state.posts.list_posts().await?;
-    Ok(Json(posts))
 }
 
 #[tokio::main]
@@ -159,6 +141,8 @@ async fn main() -> eyre::Result<()> {
     let config = config::load()
         .await
         .context("couldn't load configuration")?;
+
+    let socket_addr = SocketAddr::new(config.http.host, config.http.port);
 
     let mut tasks = JoinSet::new();
     let cancellation_token = CancellationToken::new();
@@ -198,7 +182,7 @@ async fn main() -> eyre::Result<()> {
                 let cache =
                     bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")?;
                 Ok::<PostManager, color_eyre::Report>(PostManager::new_with_cache(
-                    config.posts_dir.clone(),
+                    config.dirs.posts.clone(),
                     config.render.clone(),
                     cache,
                 ))
@@ -210,7 +194,7 @@ async fn main() -> eyre::Result<()> {
                     error!("failed to load cache: {}", err);
                     info!("using empty cache");
                     PostManager::new_with_cache(
-                        config.posts_dir.clone(),
+                        config.dirs.posts.clone(),
                         config.render.clone(),
                         Default::default(),
                     )
@@ -218,13 +202,13 @@ async fn main() -> eyre::Result<()> {
             }
         } else {
             PostManager::new_with_cache(
-                config.posts_dir.clone(),
+                config.dirs.posts.clone(),
                 config.render.clone(),
                 Default::default(),
             )
         }
     } else {
-        PostManager::new(config.posts_dir.clone(), config.render.clone())
+        PostManager::new(config.dirs.posts.clone(), config.render.clone())
     };
 
     let state = Arc::new(AppState { config, posts });
@@ -265,16 +249,10 @@ async fn main() -> eyre::Result<()> {
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<_>| {
-                    let matched_path = request
-                        .extensions()
-                        .get::<MatchedPath>()
-                        .map(MatchedPath::as_str);
-
                     info_span!(
                         "request",
                         method = ?request.method(),
                         path = ?request.uri().path(),
-                        matched_path,
                     )
                 })
                 .on_response(|response: &Response<_>, duration: Duration, span: &Span| {
@@ -285,14 +263,9 @@ async fn main() -> eyre::Result<()> {
         )
         .with_state(state.clone());
 
-    let listener = TcpListener::bind((state.config.host, state.config.port))
+    let listener = TcpListener::bind(socket_addr)
         .await
-        .with_context(|| {
-            format!(
-                "couldn't listen on {}",
-                SocketAddr::new(state.config.host, state.config.port)
-            )
-        })?;
+        .with_context(|| format!("couldn't listen on {}", socket_addr))?;
     let local_addr = listener
         .local_addr()
         .context("couldn't get socket address")?;
