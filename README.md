@@ -26,8 +26,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [ ] date formatting respects user timezone
 - [x] clean up imports and require less features
 - [ ] improve home page
-- [x] tags (backend)
-- [ ] tags (frontend)
+- [x] tags
 - [x] be blazingly fast
 - [x] 100+ MiB binary size
 
