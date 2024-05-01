@@ -24,7 +24,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [ ] make date parsing less strict
 - [ ] make date formatting better
 - [ ] date formatting respects user timezone
-- [ ] clean up imports and require less features
+- [x] clean up imports and require less features
 - [ ] improve home page
 - [x] tags (backend)
 - [ ] tags (frontend)

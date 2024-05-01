@@ -2,7 +2,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use scc::HashMap;
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::config::RenderConfig;
 use crate::post::PostMetadata;
@@ -107,7 +107,7 @@ impl Cache {
                 if get_mtime(k).is_some_and(|mtime| mtime == v.mtime) {
                     true
                 } else {
-                    tracing::debug!("removing {k} from cache");
+                    debug!("removing {k} from cache");
                     i += 1;
                     false
                 }
@@ -115,6 +115,6 @@ impl Cache {
             .await;
 
         let new_size = self.0.len();
-        tracing::debug!("removed {i} entries ({old_size} -> {new_size} entries)");
+        debug!("removed {i} entries ({old_size} -> {new_size} entries)");
     }
 }
