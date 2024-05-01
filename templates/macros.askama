@@ -1,0 +1,19 @@
+{% macro table(post) %}
+    {% match post.created_at %}
+        {% when Some(created_at) %}
+            written:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {{ created_at|date }}<br />
+        {% when None %}
+    {% endmatch %}
+    {% match post.modified_at %}
+        {% when Some(modified_at) %}
+            last modified: {{ modified_at|date }}<br />
+        {% when None %}
+    {% endmatch %}
+
+    {% if !post.tags.is_empty() %}
+        tags:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        {% for tag in post.tags %}
+            <a href="/?tag={{ tag }}" title="view all posts with this tag">{{ tag }}</a>
+        {% endfor %}<br />
+    {% endif %}
+{% endmacro %}

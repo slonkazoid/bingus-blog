@@ -37,6 +37,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use crate::config::Config;
 use crate::error::{AppResult, PostError};
+use crate::post::cache::{Cache, CACHE_VERSION};
 use crate::post::{PostManager, PostMetadata, RenderStats};
 
 type ArcState = Arc<AppState>;
@@ -179,8 +180,13 @@ async fn main() -> eyre::Result<()> {
                         .context("failed to read cache file")?;
                     buf
                 };
-                let cache =
+                let mut cache: Cache =
                     bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")?;
+                if cache.version() < CACHE_VERSION {
+                    warn!("cache version changed, clearing cache");
+                    cache = Cache::default();
+                };
+
                 Ok::<PostManager, color_eyre::Report>(PostManager::new_with_cache(
                     config.dirs.posts.clone(),
                     config.render.clone(),

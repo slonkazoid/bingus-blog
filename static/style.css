@@ -30,8 +30,7 @@
 :root,
 code {
 	/* please have one at least one good monospace font */
-	font-family: "Hack", "Hack Nerd Font", "JetBrains Mono",
-		"JetBrainsMono Nerd Font", "Ubuntu Mono", monospace, sans-serif;
+	font-family: "Hack", "Hack Nerd Font", "JetBrains Mono", "JetBrainsMono Nerd Font", "Ubuntu Mono", monospace, sans-serif;
 }
 
 :root {
@@ -79,6 +78,10 @@ footer {
 .post-author {
 	font-size: smaller;
 	opacity: 0.65;
+}
+
+div.post {
+	margin-bottom: 1em;
 }
 
 /* BEGIN cool effect everyone liked */

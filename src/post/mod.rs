@@ -1,5 +1,6 @@
-mod cache;
+pub mod cache;
 
+use std::collections::BTreeSet;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -27,7 +28,7 @@ struct FrontMatter {
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     #[serde(default)]
-    pub tags: Vec<String>,
+    pub tags: BTreeSet<String>,
 }
 
 impl FrontMatter {
@@ -45,7 +46,7 @@ impl FrontMatter {
             icon: self.icon,
             created_at: self.created_at.or_else(|| created.map(|t| t.into())),
             modified_at: self.modified_at.or_else(|| modified.map(|t| t.into())),
-            tags: self.tags,
+            tags: self.tags.into_iter().collect(),
         }
     }
 }

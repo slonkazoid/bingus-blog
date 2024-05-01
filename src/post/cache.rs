@@ -7,6 +7,9 @@ use tracing::{debug, instrument};
 use crate::config::RenderConfig;
 use crate::post::PostMetadata;
 
+/// do not persist cache if this version number changed
+pub const CACHE_VERSION: u16 = 1;
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CacheValue {
     pub metadata: PostMetadata,
@@ -15,8 +18,14 @@ pub struct CacheValue {
     config_hash: u64,
 }
 
-#[derive(Serialize, Deserialize, Default, Clone)]
-pub struct Cache(HashMap<String, CacheValue>);
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Cache(HashMap<String, CacheValue>, u16);
+
+impl Default for Cache {
+    fn default() -> Self {
+        Self(Default::default(), CACHE_VERSION)
+    }
+}
 
 impl Cache {
     pub async fn lookup(
@@ -116,5 +125,10 @@ impl Cache {
 
         let new_size = self.0.len();
         debug!("removed {i} entries ({old_size} -> {new_size} entries)");
+    }
+
+    #[inline(always)]
+    pub fn version(&self) -> u16 {
+        self.1
     }
 }

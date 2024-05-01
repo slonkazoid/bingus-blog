@@ -1,3 +1,4 @@
+{%- import "macros.askama" as macros -%}
 <h1 class="post-title">
 	{{ meta.title }}
 	<span class="post-author">- by {{ meta.author }}</span>
@@ -6,12 +7,7 @@
 <p>
 	<!-- prettier-ignore -->
 	<div>
-	{% match meta.created_at %} {% when Some(created_at) %}
-		written:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {{ created_at|date }}<br />
-	{% when None %} {% endmatch %}
-	{% match meta.modified_at %} {% when Some(modified_at) %}
-		last modified: {{ modified_at|date }}
-	{% when None %} {% endmatch %}
+	{% call macros::table(meta) %}
 	</div>
 	<a href="/posts/{{ meta.name }}">link</a><br />
 	<a href="/">back to home</a>

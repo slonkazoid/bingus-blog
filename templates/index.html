@@ -1,3 +1,4 @@
+{%- import "macros.askama" as macros -%}
 <!DOCTYPE html>
 <html lang="en">
 	<head>
@@ -16,21 +17,24 @@
 			<h2>posts</h2>
 			<!-- prettier-ignore -->
 			<div>
-			{% for post in posts %}
-				<p>
+				{% for post in posts %}
+				<div class="post">
 					<a href="/posts/{{ post.name }}"><b>{{ post.title }}</b></a>
 					<span class="post-author">- by {{ post.author }}</span>
 					<br />
 					{{ post.description }}<br />
-					{% match post.created_at %} {% when Some(created_at) %}
-						written:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {{ created_at|date }}<br />
-					{% when None %} {% endmatch %}
-					{% match post.modified_at %} {% when Some(modified_at) %}
-						last modified: {{ modified_at|date }}
-					{% when None %} {% endmatch %}
-				</p>
-			{% endfor %}
+					{% call macros::table(post) %}
+				</div>
+				{% endfor %}
 			</div>
+			{% let tags = posts|collect_tags %}<!-- prettier-br -->
+			{% if !tags.is_empty() %}
+			<h2>tags</h2>
+			{% endif %}<!-- prettier-br -->
+			{% for tag in tags %}
+			<a href="/?tag={{ tag.0 }}" title="view all posts with this tag">{{ tag.0 }}</a>
+			<span class="post-author">- {{ tag.1 }} post{% if tag.1 != 1 %}s{%endif %}</span><br />
+			{% endfor %}
 		</main>
 	</body>
 </html>
