@@ -250,26 +250,6 @@ impl PostManager {
         Ok(posts)
     }
 
-    pub async fn get_max_n_posts_with_optional_tag_sorted(
-        &self,
-        n: Option<usize>,
-        tag: Option<&String>,
-    ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
-        let mut posts = self
-            .get_all_posts_filtered(|metadata, _| {
-                !tag.is_some_and(|tag| !metadata.tags.contains(tag))
-            })
-            .await?;
-        posts.sort_unstable_by_key(|(metadata, ..)| metadata.modified_at.unwrap_or_default());
-        posts.sort_by_key(|(metadata, ..)| metadata.created_at.unwrap_or_default());
-        posts.reverse();
-        if let Some(n) = n {
-            posts.truncate(n);
-        }
-
-        Ok(posts)
-    }
-
     pub async fn get_post(
         &self,
         name: &str,

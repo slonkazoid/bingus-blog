@@ -112,7 +112,12 @@ async fn rss(
 
     let posts = state
         .posts
-        .get_max_n_posts_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .get_all_posts_filtered(|metadata, _| {
+            !query
+                .tag
+                .as_ref()
+                .is_some_and(|tag| !metadata.tags.contains(tag))
+        })
         .await?;
 
     let mut channel = ChannelBuilder::default();
