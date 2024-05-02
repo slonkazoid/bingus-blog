@@ -111,6 +111,7 @@ impl Cache {
         let old_size = self.0.len();
         let mut i = 0;
 
+        // TODO: multithread
         self.0
             .retain_async(|k, v| {
                 if get_mtime(k).is_some_and(|mtime| mtime == v.mtime) {
