@@ -37,6 +37,7 @@ comrak = { version = "0.22.0", features = [
 ], default-features = false }
 console-subscriber = { version = "0.2.0", optional = true }
 fronma = "0.2.0"
+rss = "2.0.7"
 scc = { version = "2.1.0", features = ["serde"] }
 serde = { version = "1.0.197", features = ["derive"] }
 syntect = "5.2.0"
@@ -56,4 +57,5 @@ tower-http = { version = "0.5.2", features = [
 ], default-features = false }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+url = { version = "2.5.0", features = ["serde"] }
 zstd = { version = "0.13.1", default-features = false }

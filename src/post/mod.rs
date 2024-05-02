@@ -200,7 +200,36 @@ impl PostManager {
         Ok(posts)
     }
 
-    pub async fn get_max_n_posts_with_optional_tag_sorted(
+    pub async fn get_all_posts_filtered(
+        &self,
+        filter: impl Fn(&PostMetadata, &str) -> bool,
+    ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
+        let mut posts = Vec::new();
+
+        let mut read_dir = fs::read_dir(&self.dir).await?;
+        while let Some(entry) = read_dir.next_entry().await? {
+            let path = entry.path();
+            let stat = fs::metadata(&path).await?;
+
+            if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
+                let name = path
+                    .clone()
+                    .file_stem()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+
+                let post = self.get_post(&name).await?;
+                if filter(&post.0, &post.1) {
+                    posts.push(post);
+                }
+            }
+        }
+
+        Ok(posts)
+    }
+
+    pub async fn get_max_n_post_metadata_with_optional_tag_sorted(
         &self,
         n: Option<usize>,
         tag: Option<&String>,
@@ -210,13 +239,34 @@ impl PostManager {
                 !tag.is_some_and(|tag| !metadata.tags.contains(tag))
             })
             .await?;
-        posts.sort_unstable_by_key(|metadata| metadata.created_at.unwrap_or_default());
-
+        // we still want some semblance of order if created_at is None so sort by mtime as well
+        posts.sort_unstable_by_key(|metadata| metadata.modified_at.unwrap_or_default());
+        posts.sort_by_key(|metadata| metadata.created_at.unwrap_or_default());
+        posts.reverse();
         if let Some(n) = n {
-            posts = Vec::from(&posts[posts.len().saturating_sub(n)..]);
+            posts.truncate(n);
         }
 
+        Ok(posts)
+    }
+
+    pub async fn get_max_n_posts_with_optional_tag_sorted(
+        &self,
+        n: Option<usize>,
+        tag: Option<&String>,
+    ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
+        let mut posts = self
+            .get_all_posts_filtered(|metadata, _| {
+                !tag.is_some_and(|tag| !metadata.tags.contains(tag))
+            })
+            .await?;
+        posts.sort_unstable_by_key(|(metadata, ..)| metadata.modified_at.unwrap_or_default());
+        posts.sort_by_key(|(metadata, ..)| metadata.created_at.unwrap_or_default());
         posts.reverse();
+        if let Some(n) = n {
+            posts.truncate(n);
+        }
+
         Ok(posts)
     }
 

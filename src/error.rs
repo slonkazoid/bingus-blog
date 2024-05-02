@@ -53,6 +53,10 @@ pub type AppResult<T> = Result<T, AppError>;
 pub enum AppError {
     #[error("failed to fetch post: {0}")]
     PostError(#[from] PostError),
+    #[error("rss is disabled")]
+    RssDisabled,
+    #[error(transparent)]
+    UrlError(#[from] url::ParseError),
 }
 
 impl From<std::io::Error> for AppError {
@@ -75,7 +79,8 @@ impl IntoResponse for AppError {
                 PostError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             },
-            //_ => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::RssDisabled => StatusCode::FORBIDDEN,
+            AppError::UrlError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
             status_code,

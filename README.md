@@ -11,7 +11,7 @@ blazingly fast markdown blog software written in rust memory safe
 
 ## TODO
 
-- [ ] RSS
+- [x] RSS
 - [x] finish writing this document
 - [x] document config
 - [ ] extend syntect options
@@ -27,6 +27,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [x] clean up imports and require less features
 - [ ] improve home page
 - [x] tags
+- [ ] multi-language support
 - [x] be blazingly fast
 - [x] 100+ MiB binary size
 
@@ -38,6 +39,11 @@ the default configuration with comments looks like this
 title = "bingus-blog"  # title of the website
 description = "blazingly fast markdown blog software written in rust memory safe" # description of the website
 raw_access = true      # allow users to see the raw markdown of a post
+
+[rss]
+enable = false         # serve an rss field under /feed.xml
+                       # this may be a bit resource intensive
+link = "https://..."   # public url of the blog, required if rss is enabled
 
 [dirs]
 posts = "posts"        # where posts are stored

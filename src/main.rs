@@ -18,11 +18,13 @@ use std::time::Duration;
 
 use askama_axum::Template;
 use axum::extract::{Path, Query, State};
-use axum::http::Request;
+use axum::http::{header, Request};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, Router};
 use axum::Json;
 use color_eyre::eyre::{self, Context};
+use error::AppError;
+use rss::{Category, ChannelBuilder, ItemBuilder};
 use serde::Deserialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -78,7 +80,7 @@ async fn index(
 ) -> AppResult<IndexTemplate> {
     let posts = state
         .posts
-        .get_max_n_posts_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
         .await?;
 
     Ok(IndexTemplate {
@@ -94,10 +96,66 @@ async fn all_posts(
 ) -> AppResult<Json<Vec<PostMetadata>>> {
     let posts = state
         .posts
-        .get_max_n_posts_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
         .await?;
 
     Ok(Json(posts))
+}
+
+async fn rss(
+    State(state): State<ArcState>,
+    Query(query): Query<QueryParams>,
+) -> AppResult<Response> {
+    if !state.config.rss.enable {
+        return Err(AppError::RssDisabled);
+    }
+
+    let posts = state
+        .posts
+        .get_max_n_posts_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .await?;
+
+    let mut channel = ChannelBuilder::default();
+    channel
+        .title(&state.config.title)
+        .link(state.config.rss.link.to_string())
+        .description(&state.config.description);
+    //TODO: .language()
+
+    for (metadata, content, _) in posts {
+        channel.item(
+            ItemBuilder::default()
+                .title(metadata.title)
+                .description(metadata.description)
+                .author(metadata.author)
+                .categories(
+                    metadata
+                        .tags
+                        .into_iter()
+                        .map(|tag| Category {
+                            name: tag,
+                            domain: None,
+                        })
+                        .collect::<Vec<Category>>(),
+                )
+                .pub_date(metadata.created_at.map(|date| date.to_rfc2822()))
+                .content(content)
+                .link(
+                    state
+                        .config
+                        .rss
+                        .link
+                        .join(&format!("/posts/{}", metadata.name))?
+                        .to_string(),
+                )
+                .build(),
+        );
+    }
+
+    let body = channel.build().to_string();
+    drop(channel);
+
+    Ok(([(header::CONTENT_TYPE, "text/xml")], body).into_response())
 }
 
 async fn post(State(state): State<ArcState>, Path(name): Path<String>) -> AppResult<Response> {
@@ -250,6 +308,7 @@ async fn main() -> eyre::Result<()> {
         )
         .route("/posts/:name", get(post))
         .route("/posts", get(all_posts))
+        .route("/feed.xml", get(rss))
         .nest_service("/static", ServeDir::new("static").precompressed_gzip())
         .nest_service("/media", ServeDir::new("media"))
         .layer(

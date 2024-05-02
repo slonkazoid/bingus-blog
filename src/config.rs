@@ -6,6 +6,7 @@ use color_eyre::eyre::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{error, info};
+use url::Url;
 
 use crate::ranged_i128_visitor::RangedI128Visitor;
 
@@ -51,12 +52,19 @@ pub struct DirsConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RssConfig {
+    pub enable: bool,
+    pub link: Url,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
     pub title: String,
     pub description: String,
     pub raw_access: bool,
     pub num_posts: usize,
+    pub rss: RssConfig,
     pub dirs: DirsConfig,
     pub http: HttpConfig,
     pub render: RenderConfig,
@@ -70,6 +78,16 @@ impl Default for Config {
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
             raw_access: true,
             num_posts: 5,
+            // i have a love-hate relationship with serde
+            // it was engimatic at first, but then i started actually using it
+            // writing my own serialize and deserialize implementations.. spending
+            // a lot of time in the docs trying to understand each and every option..
+            // now with this knowledge i can do stuff like this! (see rss field)
+            // and i'm proud to say that it still makes 0 sense.
+            rss: RssConfig {
+                enable: false,
+                link: Url::parse("http://example.com").unwrap(),
+            },
             dirs: Default::default(),
             http: Default::default(),
             render: Default::default(),
