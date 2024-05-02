@@ -5,7 +5,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use askama::Template;
 use chrono::{DateTime, Utc};
 use fronma::parser::{parse, ParsedData};
 use serde::{Deserialize, Serialize};
@@ -61,14 +60,6 @@ pub struct PostMetadata {
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     pub tags: Vec<String>,
-}
-
-use crate::filters;
-#[derive(Template)]
-#[template(path = "post.html")]
-struct Post<'a> {
-    pub meta: &'a PostMetadata,
-    pub rendered_markdown: String,
 }
 
 #[allow(unused)]
@@ -127,12 +118,7 @@ impl PostManager {
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let rendered_markdown = render(body, &self.config);
-        let post = Post {
-            meta: &metadata,
-            rendered_markdown,
-        }
-        .render()?;
+        let post = render(body, &self.config);
         let rendering = before_render.elapsed();
 
         if let Some(cache) = self.cache.as_ref() {

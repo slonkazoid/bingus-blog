@@ -59,8 +59,8 @@ struct IndexTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "view_post.html")]
-struct ViewPostTemplate {
+#[template(path = "post.html")]
+struct PostTemplate {
     meta: PostMetadata,
     rendered: String,
     rendered_in: RenderStats,
@@ -176,7 +176,7 @@ async fn post(State(state): State<ArcState>, Path(name): Path<String>) -> AppRes
         Ok(([("content-type", "text/plain")], buf).into_response())
     } else {
         let post = state.posts.get_post(&name).await?;
-        let page = ViewPostTemplate {
+        let page = PostTemplate {
             meta: post.0,
             rendered: post.1,
             rendered_in: post.2,

@@ -8,7 +8,7 @@ use crate::config::RenderConfig;
 use crate::post::PostMetadata;
 
 /// do not persist cache if this version number changed
-pub const CACHE_VERSION: u16 = 1;
+pub const CACHE_VERSION: u16 = 2;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CacheValue {
