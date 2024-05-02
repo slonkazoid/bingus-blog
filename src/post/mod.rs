@@ -151,7 +151,7 @@ impl PostManager {
         Ok((metadata, post, (parsing, rendering)))
     }
 
-    pub async fn list_posts(
+    pub async fn get_all_post_metadata_filtered(
         &self,
         filter: impl Fn(&PostMetadata) -> bool,
     ) -> Result<Vec<PostMetadata>, PostError> {
@@ -206,7 +206,9 @@ impl PostManager {
         tag: Option<&String>,
     ) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = self
-            .list_posts(|metadata| !tag.is_some_and(|tag| !metadata.tags.contains(tag)))
+            .get_all_post_metadata_filtered(|metadata| {
+                !tag.is_some_and(|tag| !metadata.tags.contains(tag))
+            })
             .await?;
         posts.sort_unstable_by_key(|metadata| metadata.created_at.unwrap_or_default());
 
@@ -257,8 +259,8 @@ impl PostManager {
         }
     }
 
-    pub fn into_cache(self) -> Option<Cache> {
-        self.cache
+    pub fn cache(&self) -> Option<&Cache> {
+        self.cache.as_ref()
     }
 
     pub async fn cleanup(&self) {

@@ -316,30 +316,24 @@ async fn main() -> eyre::Result<()> {
         }
 
         // write cache to file
-        let AppState { config, posts } = Arc::<AppState>::try_unwrap(state).unwrap_or_else(|state| {
-            warn!("couldn't unwrap Arc over AppState, more than one strong reference exists for Arc. cloning instead");
-            // TODO: only do this when persistence is enabled
-            //       first check config from inside the arc, then try unwrap
-            AppState::clone(state.as_ref())
-        });
+        let config = &state.config;
+        let posts = &state.posts;
         if config.cache.enable
             && config.cache.persistence
-            && let Some(cache) = posts.into_cache()
+            && let Some(cache) = posts.cache()
         {
             let path = &config.cache.file;
-            let serialized = bitcode::serialize(&cache).context("failed to serialize cache")?;
+            let serialized = bitcode::serialize(cache).context("failed to serialize cache")?;
             let mut cache_file = tokio::fs::File::create(path)
                 .await
                 .with_context(|| format!("failed to open cache at {}", path.display()))?;
+            let compression_level = config.cache.compression_level;
             if config.cache.compress {
                 let cache_file = cache_file.into_std().await;
                 tokio::task::spawn_blocking(move || {
                     std::io::Write::write_all(
-                        &mut zstd::stream::write::Encoder::new(
-                            cache_file,
-                            config.cache.compression_level,
-                        )?
-                        .auto_finish(),
+                        &mut zstd::stream::write::Encoder::new(cache_file, compression_level)?
+                            .auto_finish(),
                         &serialized,
                     )
                 })
