@@ -17,6 +17,9 @@
 			<h2>posts</h2>
 			<!-- prettier-ignore -->
 			<div>
+				{% if posts.is_empty() %}
+				there are no posts right now. check back later!
+				{% endif %}<!-- prettier-br -->
 				{% for post in posts %}
 				<div class="post">
 					<a href="/posts/{{ post.name }}"><b>{{ post.title }}</b></a>
