@@ -1,20 +1,22 @@
 pub mod cache;
 
 use std::collections::BTreeSet;
-use std::io;
-use std::path::{Path, PathBuf};
+use std::io::{self, Read, Write};
+use std::ops::Deref;
+use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
 use chrono::{DateTime, Utc};
+use color_eyre::eyre::{self, Context};
 use fronma::parser::{parse, ParsedData};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
-use tracing::warn;
+use tracing::{error, info, warn};
 
-use crate::config::RenderConfig;
+use crate::config::Config;
 use crate::markdown_render::render;
-use crate::post::cache::Cache;
+use crate::post::cache::{Cache, CACHE_VERSION};
 use crate::systemtime_as_secs::as_secs;
 use crate::PostError;
 
@@ -69,27 +71,84 @@ pub enum RenderStats {
     ParsedAndRendered(Duration, Duration, Duration),
 }
 
-#[derive(Clone)]
-pub struct PostManager {
-    dir: PathBuf,
+pub struct PostManager<C>
+where
+    C: Deref<Target = Config>,
+{
     cache: Option<Cache>,
-    config: RenderConfig,
+    config: C,
 }
 
-impl PostManager {
-    pub fn new(dir: PathBuf, config: RenderConfig) -> PostManager {
-        PostManager {
-            dir,
-            cache: None,
-            config,
-        }
-    }
+impl<C> PostManager<C>
+where
+    C: Deref<Target = Config>,
+{
+    pub async fn new(config: C) -> eyre::Result<PostManager<C>> {
+        if config.cache.enable {
+            if config.cache.persistence
+                && tokio::fs::try_exists(&config.cache.file)
+                    .await
+                    .with_context(|| {
+                        format!("failed to check if {} exists", config.cache.file.display())
+                    })?
+            {
+                info!("loading cache from file");
+                let path = &config.cache.file;
+                let load_cache = async {
+                    let mut cache_file = tokio::fs::File::open(&path)
+                        .await
+                        .context("failed to open cache file")?;
+                    let serialized = if config.cache.compress {
+                        let cache_file = cache_file.into_std().await;
+                        tokio::task::spawn_blocking(move || {
+                            let mut buf = Vec::with_capacity(4096);
+                            zstd::stream::read::Decoder::new(cache_file)?.read_to_end(&mut buf)?;
+                            Ok::<_, std::io::Error>(buf)
+                        })
+                        .await
+                        .context("failed to join blocking thread")?
+                        .context("failed to read cache file")?
+                    } else {
+                        let mut buf = Vec::with_capacity(4096);
+                        cache_file
+                            .read_to_end(&mut buf)
+                            .await
+                            .context("failed to read cache file")?;
+                        buf
+                    };
+                    let mut cache: Cache = bitcode::deserialize(serialized.as_slice())
+                        .context("failed to parse cache")?;
+                    if cache.version() < CACHE_VERSION {
+                        warn!("cache version changed, clearing cache");
+                        cache = Cache::default();
+                    };
 
-    pub fn new_with_cache(dir: PathBuf, config: RenderConfig, cache: Cache) -> PostManager {
-        PostManager {
-            dir,
-            cache: Some(cache),
-            config,
+                    Ok::<Cache, eyre::Report>(cache)
+                }
+                .await;
+
+                Ok(Self {
+                    cache: Some(match load_cache {
+                        Ok(cache) => cache,
+                        Err(err) => {
+                            error!("failed to load cache: {}", err);
+                            info!("using empty cache");
+                            Default::default()
+                        }
+                    }),
+                    config,
+                })
+            } else {
+                Ok(Self {
+                    cache: Some(Default::default()),
+                    config,
+                })
+            }
+        } else {
+            Ok(Self {
+                cache: None,
+                config,
+            })
         }
     }
 
@@ -118,7 +177,7 @@ impl PostManager {
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let post = render(body, &self.config);
+        let post = render(body, &self.config.render);
         let rendering = before_render.elapsed();
 
         if let Some(cache) = self.cache.as_ref() {
@@ -128,7 +187,7 @@ impl PostManager {
                     metadata.clone(),
                     as_secs(&modified),
                     post.clone(),
-                    &self.config,
+                    &self.config.render,
                 )
                 .await
                 .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0))
@@ -143,7 +202,7 @@ impl PostManager {
     ) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = Vec::new();
 
-        let mut read_dir = fs::read_dir(&self.dir).await?;
+        let mut read_dir = fs::read_dir(&self.config.dirs.posts).await?;
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
             let stat = fs::metadata(&path).await?;
@@ -192,7 +251,7 @@ impl PostManager {
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
         let mut posts = Vec::new();
 
-        let mut read_dir = fs::read_dir(&self.dir).await?;
+        let mut read_dir = fs::read_dir(&self.config.dirs.posts).await?;
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
             let stat = fs::metadata(&path).await?;
@@ -241,7 +300,7 @@ impl PostManager {
         name: &str,
     ) -> Result<(PostMetadata, String, RenderStats), PostError> {
         let start = Instant::now();
-        let path = self.dir.join(name.to_owned() + ".md");
+        let path = self.config.dirs.posts.join(name.to_owned() + ".md");
 
         let stat = match tokio::fs::metadata(&path).await {
             Ok(value) => value,
@@ -258,7 +317,7 @@ impl PostManager {
         let mtime = as_secs(&stat.modified()?);
 
         if let Some(cache) = self.cache.as_ref()
-            && let Some(hit) = cache.lookup(name, mtime, &self.config).await
+            && let Some(hit) = cache.lookup(name, mtime, &self.config.render).await
         {
             Ok((
                 hit.metadata,
@@ -283,12 +342,48 @@ impl PostManager {
         if let Some(cache) = self.cache.as_ref() {
             cache
                 .cleanup(|name| {
-                    std::fs::metadata(self.dir.join(name.to_owned() + ".md"))
+                    std::fs::metadata(self.config.dirs.posts.join(name.to_owned() + ".md"))
                         .ok()
                         .and_then(|metadata| metadata.modified().ok())
                         .map(|mtime| as_secs(&mtime))
                 })
                 .await
         }
+    }
+
+    fn try_drop(&mut self) -> Result<(), eyre::Report> {
+        // write cache to file
+        let config = &self.config.cache;
+        if config.enable
+            && config.persistence
+            && let Some(cache) = self.cache()
+        {
+            let path = &config.file;
+            let serialized = bitcode::serialize(cache).context("failed to serialize cache")?;
+            let mut cache_file = std::fs::File::create(path)
+                .with_context(|| format!("failed to open cache at {}", path.display()))?;
+            let compression_level = config.compression_level;
+            if config.compress {
+                std::io::Write::write_all(
+                    &mut zstd::stream::write::Encoder::new(cache_file, compression_level)?
+                        .auto_finish(),
+                    &serialized,
+                )
+            } else {
+                cache_file.write_all(&serialized)
+            }
+            .context("failed to write cache to file")?;
+            info!("wrote cache to {}", path.display());
+        }
+        Ok(())
+    }
+}
+
+impl<C> Drop for PostManager<C>
+where
+    C: Deref<Target = Config>,
+{
+    fn drop(&mut self) {
+        self.try_drop().unwrap()
     }
 }
