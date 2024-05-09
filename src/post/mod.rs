@@ -15,10 +15,10 @@ use tokio::io::AsyncReadExt;
 use tracing::{error, info, warn};
 
 use crate::config::Config;
+use crate::error::PostError;
 use crate::markdown_render::render;
 use crate::post::cache::{Cache, CACHE_VERSION};
 use crate::systemtime_as_secs::as_secs;
-use crate::PostError;
 
 #[derive(Deserialize)]
 struct FrontMatter {
@@ -71,6 +71,32 @@ pub enum RenderStats {
     ParsedAndRendered(Duration, Duration, Duration),
 }
 
+async fn load_cache(config: &Config) -> Result<Cache, eyre::Report> {
+    let path = &config.cache.file;
+    let mut cache_file = tokio::fs::File::open(&path)
+        .await
+        .context("failed to open cache file")?;
+    let serialized = if config.cache.compress {
+        let cache_file = cache_file.into_std().await;
+        tokio::task::spawn_blocking(move || {
+            let mut buf = Vec::with_capacity(4096);
+            zstd::stream::read::Decoder::new(cache_file)?.read_to_end(&mut buf)?;
+            Ok::<_, std::io::Error>(buf)
+        })
+        .await?
+        .context("failed to read cache file")?
+    } else {
+        let mut buf = Vec::with_capacity(4096);
+        cache_file
+            .read_to_end(&mut buf)
+            .await
+            .context("failed to read cache file")?;
+        buf
+    };
+
+    bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")
+}
+
 pub struct PostManager<C>
 where
     C: Deref<Target = Config>,
@@ -85,57 +111,21 @@ where
 {
     pub async fn new(config: C) -> eyre::Result<PostManager<C>> {
         if config.cache.enable {
-            if config.cache.persistence
-                && tokio::fs::try_exists(&config.cache.file)
-                    .await
-                    .with_context(|| {
-                        format!("failed to check if {} exists", config.cache.file.display())
-                    })?
-            {
+            if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
                 info!("loading cache from file");
-                let path = &config.cache.file;
-                let load_cache = async {
-                    let mut cache_file = tokio::fs::File::open(&path)
-                        .await
-                        .context("failed to open cache file")?;
-                    let serialized = if config.cache.compress {
-                        let cache_file = cache_file.into_std().await;
-                        tokio::task::spawn_blocking(move || {
-                            let mut buf = Vec::with_capacity(4096);
-                            zstd::stream::read::Decoder::new(cache_file)?.read_to_end(&mut buf)?;
-                            Ok::<_, std::io::Error>(buf)
-                        })
-                        .await
-                        .context("failed to join blocking thread")?
-                        .context("failed to read cache file")?
-                    } else {
-                        let mut buf = Vec::with_capacity(4096);
-                        cache_file
-                            .read_to_end(&mut buf)
-                            .await
-                            .context("failed to read cache file")?;
-                        buf
-                    };
-                    let mut cache: Cache = bitcode::deserialize(serialized.as_slice())
-                        .context("failed to parse cache")?;
-                    if cache.version() < CACHE_VERSION {
-                        warn!("cache version changed, clearing cache");
-                        cache = Cache::default();
-                    };
+                let mut cache = load_cache(&config).await.unwrap_or_else(|err| {
+                    error!("failed to load cache: {}", err);
+                    info!("using empty cache");
+                    Default::default()
+                });
 
-                    Ok::<Cache, eyre::Report>(cache)
-                }
-                .await;
+                if cache.version() < CACHE_VERSION {
+                    warn!("cache version changed, clearing cache");
+                    cache = Default::default();
+                };
 
                 Ok(Self {
-                    cache: Some(match load_cache {
-                        Ok(cache) => cache,
-                        Err(err) => {
-                            error!("failed to load cache: {}", err);
-                            info!("using empty cache");
-                            Default::default()
-                        }
-                    }),
+                    cache: Some(cache),
                     config,
                 })
             } else {

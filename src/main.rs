@@ -58,12 +58,12 @@ async fn main() -> eyre::Result<()> {
     let posts = Arc::new(PostManager::new(Arc::clone(&config)).await?);
     let state = AppState {
         config: Arc::clone(&config),
-        posts,
+        posts: Arc::clone(&posts),
     };
 
     if config.cache.enable && config.cache.cleanup {
         if let Some(t) = config.cache.cleanup_interval {
-            let state = state.clone();
+            let posts = Arc::clone(&posts);
             let token = cancellation_token.child_token();
             debug!("setting up cleanup task");
             tasks.spawn(async move {
@@ -72,13 +72,13 @@ async fn main() -> eyre::Result<()> {
                     select! {
                         _ = token.cancelled() => break,
                         _ = interval.tick() => {
-                            state.posts.cleanup().await
+                            posts.cleanup().await
                         }
                     }
                 }
             });
         } else {
-            state.posts.cleanup().await;
+            posts.cleanup().await;
         }
     }
 
