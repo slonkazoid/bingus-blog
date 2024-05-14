@@ -1,10 +1,13 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::io::Read;
 
+use color_eyre::eyre::{self, Context};
 use scc::HashMap;
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncReadExt;
 use tracing::{debug, instrument};
 
-use crate::config::RenderConfig;
+use crate::config::{Config, RenderConfig};
 use crate::post::PostMetadata;
 
 /// do not persist cache if this version number changed
@@ -132,4 +135,30 @@ impl Cache {
     pub fn version(&self) -> u16 {
         self.1
     }
+}
+
+pub(crate) async fn load_cache(config: &Config) -> Result<Cache, eyre::Report> {
+    let path = &config.cache.file;
+    let mut cache_file = tokio::fs::File::open(&path)
+        .await
+        .context("failed to open cache file")?;
+    let serialized = if config.cache.compress {
+        let cache_file = cache_file.into_std().await;
+        tokio::task::spawn_blocking(move || {
+            let mut buf = Vec::with_capacity(4096);
+            zstd::stream::read::Decoder::new(cache_file)?.read_to_end(&mut buf)?;
+            Ok::<_, std::io::Error>(buf)
+        })
+        .await?
+        .context("failed to read cache file")?
+    } else {
+        let mut buf = Vec::with_capacity(4096);
+        cache_file
+            .read_to_end(&mut buf)
+            .await
+            .context("failed to read cache file")?;
+        buf
+    };
+
+    bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")
 }
