@@ -1,46 +1,14 @@
 pub mod cache;
 pub mod markdown_posts;
 
-use std::collections::BTreeSet;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
+use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::error::PostError;
 pub use crate::post::markdown_posts::MarkdownPosts;
-
-#[derive(Deserialize)]
-struct FrontMatter {
-    pub title: String,
-    pub description: String,
-    pub author: String,
-    pub icon: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub modified_at: Option<DateTime<Utc>>,
-    #[serde(default)]
-    pub tags: BTreeSet<String>,
-}
-
-impl FrontMatter {
-    pub fn into_full(
-        self,
-        name: String,
-        created: Option<SystemTime>,
-        modified: Option<SystemTime>,
-    ) -> PostMetadata {
-        PostMetadata {
-            name,
-            title: self.title,
-            description: self.description,
-            author: self.author,
-            icon: self.icon,
-            created_at: self.created_at.or_else(|| created.map(|t| t.into())),
-            modified_at: self.modified_at.or_else(|| modified.map(|t| t.into())),
-            tags: self.tags.into_iter().collect(),
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostMetadata {
@@ -54,11 +22,16 @@ pub struct PostMetadata {
     pub tags: Vec<String>,
 }
 
-#[allow(unused)]
 pub enum RenderStats {
     Cached(Duration),
     // format: Total, Parsed in, Rendered in
     ParsedAndRendered(Duration, Duration, Duration),
+}
+
+#[allow(clippy::large_enum_variant)] // Raw will be returned very rarely
+pub enum ReturnedPost {
+    Rendered(PostMetadata, String, RenderStats),
+    Raw(Vec<u8>, HeaderValue),
 }
 
 pub trait PostManager {
@@ -97,10 +70,13 @@ pub trait PostManager {
 
     #[allow(unused)]
     async fn get_post_metadata(&self, name: &str) -> Result<PostMetadata, PostError> {
-        self.get_post(name).await.map(|(meta, ..)| meta)
+        match self.get_post(name).await? {
+            ReturnedPost::Rendered(metadata, ..) => Ok(metadata),
+            ReturnedPost::Raw(..) => Err(PostError::NotFound(name.to_string())),
+        }
     }
 
-    async fn get_post(&self, name: &str) -> Result<(PostMetadata, String, RenderStats), PostError>;
+    async fn get_post(&self, name: &str) -> Result<ReturnedPost, PostError>;
 
     async fn cleanup(&self);
 }

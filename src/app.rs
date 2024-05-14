@@ -3,13 +3,13 @@ use std::time::Duration;
 
 use askama_axum::Template;
 use axum::extract::{Path, Query, State};
+use axum::http::header::CONTENT_TYPE;
 use axum::http::{header, Request};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use rss::{Category, ChannelBuilder, ItemBuilder};
 use serde::Deserialize;
-use tokio::io::AsyncReadExt;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span, Span};
@@ -17,7 +17,7 @@ use tracing::{info, info_span, Span};
 use crate::config::Config;
 use crate::error::{AppError, AppResult};
 use crate::filters;
-use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats};
+use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats, ReturnedPost};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -138,26 +138,20 @@ async fn post(
     State(AppState { config, posts }): State<AppState>,
     Path(name): Path<String>,
 ) -> AppResult<Response> {
-    if name.ends_with(".md") && config.raw_access {
-        let mut file = tokio::fs::OpenOptions::new()
-            .read(true)
-            .open(config.dirs.posts.join(&name))
-            .await?;
+    match posts.get_post(&name).await? {
+        ReturnedPost::Rendered(meta, rendered, rendered_in) => {
+            let page = PostTemplate {
+                meta,
+                rendered,
+                rendered_in,
+                markdown_access: config.markdown_access,
+            };
 
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf).await?;
-
-        Ok(([("content-type", "text/plain")], buf).into_response())
-    } else {
-        let post = posts.get_post(&name).await?;
-        let page = PostTemplate {
-            meta: post.0,
-            rendered: post.1,
-            rendered_in: post.2,
-            markdown_access: config.raw_access,
-        };
-
-        Ok(page.into_response())
+            Ok(page.into_response())
+        }
+        ReturnedPost::Raw(body, content_type) => {
+            Ok(([(CONTENT_TYPE, content_type)], body).into_response())
+        }
     }
 }
 

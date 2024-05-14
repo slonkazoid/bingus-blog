@@ -1,11 +1,16 @@
+use std::collections::BTreeSet;
 use std::io::{self, Write};
 use std::ops::Deref;
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
 
+use axum::http::HeaderValue;
+use chrono::{DateTime, Utc};
 use color_eyre::eyre::{self, Context};
 use fronma::parser::{parse, ParsedData};
+use serde::Deserialize;
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tracing::{error, info, warn};
@@ -13,9 +18,40 @@ use tracing::{error, info, warn};
 use crate::config::Config;
 use crate::markdown_render::render;
 use crate::post::cache::{load_cache, Cache, CACHE_VERSION};
-use crate::post::{FrontMatter, PostError, PostManager, PostMetadata, RenderStats};
+use crate::post::{PostError, PostManager, PostMetadata, RenderStats, ReturnedPost};
 use crate::systemtime_as_secs::as_secs;
 
+#[derive(Deserialize)]
+struct FrontMatter {
+    pub title: String,
+    pub description: String,
+    pub author: String,
+    pub icon: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub modified_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub tags: BTreeSet<String>,
+}
+
+impl FrontMatter {
+    pub fn into_full(
+        self,
+        name: String,
+        created: Option<SystemTime>,
+        modified: Option<SystemTime>,
+    ) -> PostMetadata {
+        PostMetadata {
+            name,
+            title: self.title,
+            description: self.description,
+            author: self.author,
+            icon: self.icon,
+            created_at: self.created_at.or_else(|| created.map(|t| t.into())),
+            modified_at: self.modified_at.or_else(|| modified.map(|t| t.into())),
+            tags: self.tags.into_iter().collect(),
+        }
+    }
+}
 pub struct MarkdownPosts<C>
 where
     C: Deref<Target = Config>,
@@ -219,8 +255,10 @@ where
                     .to_string();
 
                 let post = self.get_post(&name).await?;
-                if filter(&post.0, &post.1) {
-                    posts.push(post);
+                if let ReturnedPost::Rendered(meta, content, stats) = post
+                    && filter(&meta, &content)
+                {
+                    posts.push((meta, content, stats));
                 }
             }
         }
@@ -228,39 +266,66 @@ where
         Ok(posts)
     }
 
-    async fn get_post(&self, name: &str) -> Result<(PostMetadata, String, RenderStats), PostError> {
-        let start = Instant::now();
-        let path = self.config.dirs.posts.join(name.to_owned() + ".md");
+    async fn get_post(&self, name: &str) -> Result<ReturnedPost, PostError> {
+        if self.config.markdown_access && name.ends_with(".md") {
+            let path = self.config.dirs.posts.join(name);
 
-        let stat = match tokio::fs::metadata(&path).await {
-            Ok(value) => value,
-            Err(err) => match err.kind() {
-                io::ErrorKind::NotFound => {
-                    if let Some(cache) = self.cache.as_ref() {
-                        cache.remove(name).await;
+            let mut file = match tokio::fs::OpenOptions::new().read(true).open(&path).await {
+                Ok(value) => value,
+                Err(err) => match err.kind() {
+                    io::ErrorKind::NotFound => {
+                        if let Some(cache) = self.cache.as_ref() {
+                            cache.remove(name).await;
+                        }
+                        return Err(PostError::NotFound(name.to_string()));
                     }
-                    return Err(PostError::NotFound(name.to_string()));
-                }
-                _ => return Err(PostError::IoError(err)),
-            },
-        };
-        let mtime = as_secs(&stat.modified()?);
+                    _ => return Err(PostError::IoError(err)),
+                },
+            };
 
-        if let Some(cache) = self.cache.as_ref()
-            && let Some(hit) = cache.lookup(name, mtime, &self.config.render).await
-        {
-            Ok((
-                hit.metadata,
-                hit.rendered,
-                RenderStats::Cached(start.elapsed()),
+            let mut buf = Vec::with_capacity(4096);
+
+            file.read_to_end(&mut buf).await?;
+
+            Ok(ReturnedPost::Raw(
+                buf,
+                HeaderValue::from_static("text/plain"),
             ))
         } else {
-            let (metadata, rendered, stats) = self.parse_and_render(name.to_string(), path).await?;
-            Ok((
-                metadata,
-                rendered,
-                RenderStats::ParsedAndRendered(start.elapsed(), stats.0, stats.1),
-            ))
+            let start = Instant::now();
+            let path = self.config.dirs.posts.join(name.to_owned() + ".md");
+
+            let stat = match tokio::fs::metadata(&path).await {
+                Ok(value) => value,
+                Err(err) => match err.kind() {
+                    io::ErrorKind::NotFound => {
+                        if let Some(cache) = self.cache.as_ref() {
+                            cache.remove(name).await;
+                        }
+                        return Err(PostError::NotFound(name.to_string()));
+                    }
+                    _ => return Err(PostError::IoError(err)),
+                },
+            };
+            let mtime = as_secs(&stat.modified()?);
+
+            if let Some(cache) = self.cache.as_ref()
+                && let Some(hit) = cache.lookup(name, mtime, &self.config.render).await
+            {
+                Ok(ReturnedPost::Rendered(
+                    hit.metadata,
+                    hit.rendered,
+                    RenderStats::Cached(start.elapsed()),
+                ))
+            } else {
+                let (metadata, rendered, stats) =
+                    self.parse_and_render(name.to_string(), path).await?;
+                Ok(ReturnedPost::Rendered(
+                    metadata,
+                    rendered,
+                    RenderStats::ParsedAndRendered(start.elapsed(), stats.0, stats.1),
+                ))
+            }
         }
     }
 

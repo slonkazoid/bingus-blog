@@ -64,7 +64,7 @@ pub struct RssConfig {
 pub struct Config {
     pub title: String,
     pub description: String,
-    pub raw_access: bool,
+    pub markdown_access: bool,
     pub num_posts: usize,
     pub rss: RssConfig,
     pub dirs: DirsConfig,
@@ -78,7 +78,7 @@ impl Default for Config {
         Self {
             title: "bingus-blog".into(),
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
-            raw_access: true,
+            markdown_access: true,
             num_posts: 5,
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it

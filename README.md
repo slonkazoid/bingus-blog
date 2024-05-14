@@ -38,7 +38,8 @@ the default configuration with comments looks like this
 ```toml
 title = "bingus-blog"  # title of the website
 description = "blazingly fast markdown blog software written in rust memory safe" # description of the website
-raw_access = true      # allow users to see the raw markdown of a post
+markdown_access = true # allow users to see the raw markdown of a post
+                       # endpoint: /posts/<name>.md
 
 [rss]
 enable = false         # serve an rss field under /feed.xml
