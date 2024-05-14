@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use color_eyre::eyre::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 use url::Url;
 
 use crate::ranged_i128_visitor::RangedI128Visitor;
@@ -49,6 +49,8 @@ pub struct HttpConfig {
 pub struct DirsConfig {
     pub posts: PathBuf,
     pub media: PathBuf,
+    #[serde(rename = "static")]
+    pub _static: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -101,6 +103,7 @@ impl Default for DirsConfig {
         Self {
             posts: "posts".into(),
             media: "media".into(),
+            _static: "static".into(),
         }
     }
 }
@@ -138,6 +141,7 @@ impl Default for CacheConfig {
     }
 }
 
+#[instrument(name = "config")]
 pub async fn load() -> Result<Config> {
     let config_file = env::var(format!(
         "{}_CONFIG",

@@ -17,12 +17,12 @@ use tracing::{info, info_span, Span};
 use crate::config::Config;
 use crate::error::{AppError, AppResult};
 use crate::filters;
-use crate::post::{PostManager, PostMetadata, RenderStats};
+use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats};
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
-    pub posts: Arc<PostManager<Arc<Config>>>,
+    pub posts: Arc<MarkdownPosts<Arc<Config>>>,
 }
 
 #[derive(Template)]
@@ -84,7 +84,7 @@ async fn rss(
     }
 
     let posts = posts
-        .get_all_posts_filtered(|metadata, _| {
+        .get_all_posts(|metadata, _| {
             !query
                 .tag
                 .as_ref()
@@ -161,7 +161,7 @@ async fn post(
     }
 }
 
-pub fn new() -> Router<AppState> {
+pub fn new(config: &Config) -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route(
@@ -173,8 +173,11 @@ pub fn new() -> Router<AppState> {
         .route("/posts/:name", get(post))
         .route("/posts", get(all_posts))
         .route("/feed.xml", get(rss))
-        .nest_service("/static", ServeDir::new("static").precompressed_gzip())
-        .nest_service("/media", ServeDir::new("media"))
+        .nest_service(
+            "/static",
+            ServeDir::new(&config.dirs._static).precompressed_gzip(),
+        )
+        .nest_service("/media", ServeDir::new(&config.dirs.media))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<_>| {

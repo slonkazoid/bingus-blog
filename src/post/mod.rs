@@ -97,7 +97,51 @@ async fn load_cache(config: &Config) -> Result<Cache, eyre::Report> {
     bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")
 }
 
-pub struct PostManager<C>
+pub trait PostManager {
+    async fn get_all_post_metadata(
+        &self,
+        filter: impl Fn(&PostMetadata) -> bool,
+    ) -> Result<Vec<PostMetadata>, PostError> {
+        self.get_all_posts(|m, _| filter(m))
+            .await
+            .map(|vec| vec.into_iter().map(|(meta, ..)| meta).collect())
+    }
+
+    async fn get_all_posts(
+        &self,
+        filter: impl Fn(&PostMetadata, &str) -> bool,
+    ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError>;
+
+    async fn get_max_n_post_metadata_with_optional_tag_sorted(
+        &self,
+        n: Option<usize>,
+        tag: Option<&String>,
+    ) -> Result<Vec<PostMetadata>, PostError> {
+        let mut posts = self
+            .get_all_post_metadata(|metadata| !tag.is_some_and(|tag| !metadata.tags.contains(tag)))
+            .await?;
+        // we still want some semblance of order if created_at is None so sort by mtime as well
+        posts.sort_unstable_by_key(|metadata| metadata.modified_at.unwrap_or_default());
+        posts.sort_by_key(|metadata| metadata.created_at.unwrap_or_default());
+        posts.reverse();
+        if let Some(n) = n {
+            posts.truncate(n);
+        }
+
+        Ok(posts)
+    }
+
+    #[allow(unused)]
+    async fn get_post_metadata(&self, name: &str) -> Result<PostMetadata, PostError> {
+        self.get_post(name).await.map(|(meta, ..)| meta)
+    }
+
+    async fn get_post(&self, name: &str) -> Result<(PostMetadata, String, RenderStats), PostError>;
+
+    async fn cleanup(&self);
+}
+
+pub struct MarkdownPosts<C>
 where
     C: Deref<Target = Config>,
 {
@@ -105,11 +149,11 @@ where
     config: C,
 }
 
-impl<C> PostManager<C>
+impl<C> MarkdownPosts<C>
 where
     C: Deref<Target = Config>,
 {
-    pub async fn new(config: C) -> eyre::Result<PostManager<C>> {
+    pub async fn new(config: C) -> eyre::Result<MarkdownPosts<C>> {
         if config.cache.enable {
             if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
                 info!("loading cache from file");
@@ -186,7 +230,52 @@ where
         Ok((metadata, post, (parsing, rendering)))
     }
 
-    pub async fn get_all_post_metadata_filtered(
+    fn cache(&self) -> Option<&Cache> {
+        self.cache.as_ref()
+    }
+
+    fn try_drop(&mut self) -> Result<(), eyre::Report> {
+        // write cache to file
+        let config = &self.config.cache;
+        if config.enable
+            && config.persistence
+            && let Some(cache) = self.cache()
+        {
+            let path = &config.file;
+            let serialized = bitcode::serialize(cache).context("failed to serialize cache")?;
+            let mut cache_file = std::fs::File::create(path)
+                .with_context(|| format!("failed to open cache at {}", path.display()))?;
+            let compression_level = config.compression_level;
+            if config.compress {
+                std::io::Write::write_all(
+                    &mut zstd::stream::write::Encoder::new(cache_file, compression_level)?
+                        .auto_finish(),
+                    &serialized,
+                )
+            } else {
+                cache_file.write_all(&serialized)
+            }
+            .context("failed to write cache to file")?;
+            info!("wrote cache to {}", path.display());
+        }
+        Ok(())
+    }
+}
+
+impl<C> Drop for MarkdownPosts<C>
+where
+    C: Deref<Target = Config>,
+{
+    fn drop(&mut self) {
+        self.try_drop().unwrap()
+    }
+}
+
+impl<C> PostManager for MarkdownPosts<C>
+where
+    C: Deref<Target = Config>,
+{
+    async fn get_all_post_metadata(
         &self,
         filter: impl Fn(&PostMetadata) -> bool,
     ) -> Result<Vec<PostMetadata>, PostError> {
@@ -235,7 +324,7 @@ where
         Ok(posts)
     }
 
-    pub async fn get_all_posts_filtered(
+    async fn get_all_posts(
         &self,
         filter: impl Fn(&PostMetadata, &str) -> bool,
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
@@ -264,31 +353,7 @@ where
         Ok(posts)
     }
 
-    pub async fn get_max_n_post_metadata_with_optional_tag_sorted(
-        &self,
-        n: Option<usize>,
-        tag: Option<&String>,
-    ) -> Result<Vec<PostMetadata>, PostError> {
-        let mut posts = self
-            .get_all_post_metadata_filtered(|metadata| {
-                !tag.is_some_and(|tag| !metadata.tags.contains(tag))
-            })
-            .await?;
-        // we still want some semblance of order if created_at is None so sort by mtime as well
-        posts.sort_unstable_by_key(|metadata| metadata.modified_at.unwrap_or_default());
-        posts.sort_by_key(|metadata| metadata.created_at.unwrap_or_default());
-        posts.reverse();
-        if let Some(n) = n {
-            posts.truncate(n);
-        }
-
-        Ok(posts)
-    }
-
-    pub async fn get_post(
-        &self,
-        name: &str,
-    ) -> Result<(PostMetadata, String, RenderStats), PostError> {
+    async fn get_post(&self, name: &str) -> Result<(PostMetadata, String, RenderStats), PostError> {
         let start = Instant::now();
         let path = self.config.dirs.posts.join(name.to_owned() + ".md");
 
@@ -324,11 +389,7 @@ where
         }
     }
 
-    pub fn cache(&self) -> Option<&Cache> {
-        self.cache.as_ref()
-    }
-
-    pub async fn cleanup(&self) {
+    async fn cleanup(&self) {
         if let Some(cache) = self.cache.as_ref() {
             cache
                 .cleanup(|name| {
@@ -339,41 +400,5 @@ where
                 })
                 .await
         }
-    }
-
-    fn try_drop(&mut self) -> Result<(), eyre::Report> {
-        // write cache to file
-        let config = &self.config.cache;
-        if config.enable
-            && config.persistence
-            && let Some(cache) = self.cache()
-        {
-            let path = &config.file;
-            let serialized = bitcode::serialize(cache).context("failed to serialize cache")?;
-            let mut cache_file = std::fs::File::create(path)
-                .with_context(|| format!("failed to open cache at {}", path.display()))?;
-            let compression_level = config.compression_level;
-            if config.compress {
-                std::io::Write::write_all(
-                    &mut zstd::stream::write::Encoder::new(cache_file, compression_level)?
-                        .auto_finish(),
-                    &serialized,
-                )
-            } else {
-                cache_file.write_all(&serialized)
-            }
-            .context("failed to write cache to file")?;
-            info!("wrote cache to {}", path.display());
-        }
-        Ok(())
-    }
-}
-
-impl<C> Drop for PostManager<C>
-where
-    C: Deref<Target = Config>,
-{
-    fn drop(&mut self) {
-        self.try_drop().unwrap()
     }
 }

@@ -27,7 +27,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
 use crate::app::AppState;
-use crate::post::PostManager;
+use crate::post::{MarkdownPosts, PostManager};
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -55,7 +55,7 @@ async fn main() -> eyre::Result<()> {
     let mut tasks = JoinSet::new();
     let cancellation_token = CancellationToken::new();
 
-    let posts = Arc::new(PostManager::new(Arc::clone(&config)).await?);
+    let posts = Arc::new(MarkdownPosts::new(Arc::clone(&config)).await?);
     let state = AppState {
         config: Arc::clone(&config),
         posts: Arc::clone(&posts),
@@ -82,7 +82,7 @@ async fn main() -> eyre::Result<()> {
         }
     }
 
-    let app = app::new().with_state(state.clone());
+    let app = app::new(&config).with_state(state.clone());
 
     let listener = TcpListener::bind(socket_addr)
         .await
