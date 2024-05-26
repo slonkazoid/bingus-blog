@@ -9,6 +9,9 @@
 		<meta property="og:description" content="{{ description }}" />
 		<title>{{ title }}</title>
 		<link rel="stylesheet" href="/static/style.css" />
+		{% if rss %}
+		<link rel="alternate" type="application/rss+xml" title="{{ title }}" href="/feed.xml" />
+		{% endif %}
 	</head>
 	<body>
 		<main>

@@ -56,6 +56,7 @@ struct IndexTemplate {
     title: String,
     description: String,
     posts: Vec<PostMetadata>,
+    rss: bool,
 }
 
 #[derive(Template)]
@@ -87,6 +88,7 @@ async fn index(
         title: state.config.title.clone(),
         description: state.config.description.clone(),
         posts,
+        rss: state.config.rss.enable,
     })
 }
 
