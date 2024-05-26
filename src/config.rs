@@ -141,7 +141,7 @@ impl Default for CacheConfig {
 pub async fn load() -> Result<Config> {
     let config_file = env::var(format!(
         "{}_CONFIG",
-        env!("CARGO_BIN_NAME").to_uppercase().replace("-", "_")
+        env!("CARGO_BIN_NAME").to_uppercase().replace('-', "_")
     ))
     .unwrap_or(String::from("config.toml"));
     match tokio::fs::OpenOptions::new()
