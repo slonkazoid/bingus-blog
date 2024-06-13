@@ -31,6 +31,7 @@ struct IndexTemplate {
     title: String,
     description: String,
     posts: Vec<PostMetadata>,
+    rss: bool,
     df: DateFormat,
     js: bool,
 }
@@ -65,6 +66,7 @@ async fn index(
         title: config.title.clone(),
         description: config.description.clone(),
         posts,
+        rss: config.rss.enable,
         df: config.date_format.clone(),
         js: config.js_enable,
     })
