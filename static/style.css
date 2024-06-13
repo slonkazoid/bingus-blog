@@ -97,7 +97,6 @@ div.post {
 
 .table > .value {
 	margin-left: 1em;
-	text-align: end;
 	grid-column: 2;
 }
 
