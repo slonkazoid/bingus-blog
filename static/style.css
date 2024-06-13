@@ -84,6 +84,35 @@ div.post {
 	margin-bottom: 1em;
 }
 
+.table {
+	display: grid;
+	/*grid-template-columns: auto auto auto;
+	grid-template-rows: auto auto;*/
+	width: max-content;
+}
+
+.table > :not(.value)::after {
+	content: ":";
+}
+
+.table > .value {
+	margin-left: 1em;
+	text-align: end;
+	grid-column: 2;
+}
+
+.table > .created {
+	grid-row: 1;
+}
+
+.table > .modified {
+	grid-row: 2;
+}
+
+.table > .tags {
+	grid-row: 3;
+}
+
 /* BEGIN cool effect everyone liked */
 
 body {

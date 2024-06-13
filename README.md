@@ -22,7 +22,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [ ] ^ replace HashMap with HashCache once i implement [this](https://github.com/wvwwvwwv/scalable-concurrent-containers/issues/139)
 - [x] (de)compress cache with zstd on startup/shutdown
 - [ ] make date parsing less strict
-- [ ] make date formatting better
+- [x] make date formatting better
 - [ ] date formatting respects user timezone
 - [x] clean up imports and require less features
 - [ ] improve home page
@@ -36,9 +36,16 @@ blazingly fast markdown blog software written in rust memory safe
 the default configuration with comments looks like this
 
 ```toml
-title = "bingus-blog"  # title of the website
-description = "blazingly fast markdown blog software written in rust memory safe" # description of the website
-raw_access = true      # allow users to see the raw markdown of a post
+title = "bingus-blog"  # title of the blog
+# description of the blog
+description = "blazingly fast markdown blog software written in rust memory safe"
+markdown_access = true # allow users to see the raw markdown of a post
+                       # endpoint: /posts/<name>.md
+date_format = "RFC3339" # format string used to format dates in the backend
+                       # it's highly recommended to leave this as default,
+                       # so the date can be formatted by the browser.
+                       # format: https://docs.rs/chrono/latest/chrono/format/strftime/index.html#specifiers
+js_enable = true       # enable javascript (required for above)
 
 [rss]
 enable = false         # serve an rss field under /feed.xml
