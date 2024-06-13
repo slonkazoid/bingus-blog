@@ -1,5 +1,5 @@
 use std::env;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv6Addr};
 use std::path::PathBuf;
 
 use color_eyre::eyre::{bail, Context, Result};
@@ -59,13 +59,22 @@ pub struct RssConfig {
     pub link: Url,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub enum DateFormat {
+    #[default]
+    RFC3339,
+    #[serde(untagged)]
+    Strftime(String),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
     pub title: String,
     pub description: String,
     pub markdown_access: bool,
-    pub num_posts: usize,
+    pub date_format: DateFormat,
+    pub js_enable: bool,
     pub rss: RssConfig,
     pub dirs: DirsConfig,
     pub http: HttpConfig,
@@ -79,7 +88,8 @@ impl Default for Config {
             title: "bingus-blog".into(),
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
             markdown_access: true,
-            num_posts: 5,
+            date_format: Default::default(),
+            js_enable: true,
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it
             // writing my own serialize and deserialize implementations.. spending
@@ -111,7 +121,7 @@ impl Default for DirsConfig {
 impl Default for HttpConfig {
     fn default() -> Self {
         Self {
-            host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            host: IpAddr::V6(Ipv6Addr::UNSPECIFIED),
             port: 3000,
         }
     }

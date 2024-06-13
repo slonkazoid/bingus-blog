@@ -1,11 +1,29 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::time::Duration;
 
 use chrono::{DateTime, TimeZone};
 
+use crate::config::DateFormat;
 use crate::post::PostMetadata;
 
-pub fn date<T: TimeZone>(date: &DateTime<T>) -> Result<String, askama::Error> {
-    Ok(date.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+fn format_date<T>(date: &DateTime<T>, date_format: &DateFormat) -> String
+where
+    T: TimeZone,
+    T::Offset: Display,
+{
+    match date_format {
+        DateFormat::RFC3339 => date.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        DateFormat::Strftime(ref format_string) => date.format(format_string).to_string(),
+    }
+}
+
+pub fn date<T>(date: &DateTime<T>, date_format: &DateFormat) -> Result<String, askama::Error>
+where
+    T: TimeZone,
+    T::Offset: Display,
+{
+    Ok(format_date(date, date_format))
 }
 
 pub fn duration(duration: &&Duration) -> Result<String, askama::Error> {

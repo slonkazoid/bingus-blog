@@ -2,20 +2,21 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<head>
-			<meta charset="UTF-8" />
-			<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-			<meta name="description" content="{{ meta.title }}" />
-			<meta property="og:title" content="{{ meta.title }}" />
-			<meta property="og:description" content="{{ meta.description }}" />
-			{% match meta.icon %} {% when Some with (url) %}
-			<meta property="og:image" content="{{ url }}" />
-			<link rel="shortcut icon" href="{{ url }}" />
-			{% when None %} {% endmatch %}
-			<title>{{ meta.title }}</title>
-			<link rel="stylesheet" href="/static/style.css" />
-			<link rel="stylesheet" href="/static/post.css" />
-		</head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="description" content="{{ meta.title }}" />
+		<meta property="og:title" content="{{ meta.title }}" />
+		<meta property="og:description" content="{{ meta.description }}" />
+		{% match meta.icon %} {% when Some with (url) %}
+		<meta property="og:image" content="{{ url }}" />
+		<link rel="shortcut icon" href="{{ url }}" />
+		{% when None %} {% endmatch %}
+		<title>{{ meta.title }}</title>
+		<link rel="stylesheet" href="/static/style.css" />
+		<link rel="stylesheet" href="/static/post.css" />
+		{% if js %}
+		<script src="/static/main.js" defer></script>
+		{% endif %}
 	</head>
 	<body>
 		<main>
@@ -24,11 +25,9 @@
 				<span class="post-author">- by {{ meta.author }}</span>
 			</h1>
 			<p class="post-desc">{{ meta.description }}</p>
-			<div class="" post>
+			<div class="post">
 				<!-- prettier-ignore -->
-				<div>
 				{% call macros::table(meta) %}
-				</div>
 				<a href="/posts/{{ meta.name }}">link</a><br />
 				<a href="/">back to home</a>
 			</div>

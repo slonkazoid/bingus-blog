@@ -14,7 +14,7 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span, Span};
 
-use crate::config::Config;
+use crate::config::{Config, DateFormat};
 use crate::error::{AppError, AppResult};
 use crate::filters;
 use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats, ReturnedPost};
@@ -31,6 +31,8 @@ struct IndexTemplate {
     title: String,
     description: String,
     posts: Vec<PostMetadata>,
+    df: DateFormat,
+    js: bool,
 }
 
 #[derive(Template)]
@@ -40,6 +42,8 @@ struct PostTemplate {
     rendered: String,
     rendered_in: RenderStats,
     markdown_access: bool,
+    df: DateFormat,
+    js: bool,
 }
 
 #[derive(Deserialize)]
@@ -61,6 +65,8 @@ async fn index(
         title: config.title.clone(),
         description: config.description.clone(),
         posts,
+        df: config.date_format.clone(),
+        js: config.js_enable,
     })
 }
 
@@ -145,6 +151,8 @@ async fn post(
                 rendered,
                 rendered_in,
                 markdown_access: config.markdown_access,
+                df: config.date_format.clone(),
+                js: config.js_enable,
             };
 
             Ok(page.into_response())

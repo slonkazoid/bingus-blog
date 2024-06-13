@@ -1,14 +1,13 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Read;
 
+use crate::config::{Config, RenderConfig};
+use crate::post::PostMetadata;
 use color_eyre::eyre::{self, Context};
 use scc::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
 use tracing::{debug, instrument};
-
-use crate::config::{Config, RenderConfig};
-use crate::post::PostMetadata;
 
 /// do not persist cache if this version number changed
 pub const CACHE_VERSION: u16 = 2;

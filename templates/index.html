@@ -9,6 +9,9 @@
 		<meta property="og:description" content="{{ description }}" />
 		<title>{{ title }}</title>
 		<link rel="stylesheet" href="/static/style.css" />
+		{% if js %}
+		<script src="/static/main.js" defer></script>
+		{% endif %}
 	</head>
 	<body>
 		<main>
