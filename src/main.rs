@@ -6,6 +6,7 @@ mod error;
 mod filters;
 mod hash_arc_store;
 mod markdown_render;
+mod platform;
 mod post;
 mod ranged_i128_visitor;
 mod systemtime_as_secs;
@@ -93,13 +94,7 @@ async fn main() -> eyre::Result<()> {
     info!("listening on http://{}", local_addr);
 
     let sigint = signal::ctrl_c();
-    #[cfg(unix)]
-    let mut sigterm_handler =
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    #[cfg(unix)]
-    let sigterm = sigterm_handler.recv();
-    #[cfg(not(unix))] // TODO: kill all windows server users
-    let sigterm = std::future::pending::<()>();
+    let sigterm = platform::sigterm();
 
     let axum_token = cancellation_token.child_token();
 
@@ -135,13 +130,7 @@ async fn main() -> eyre::Result<()> {
     };
 
     let sigint = signal::ctrl_c();
-    #[cfg(unix)]
-    let mut sigterm_handler =
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    #[cfg(unix)]
-    let sigterm = sigterm_handler.recv();
-    #[cfg(not(unix))]
-    let sigterm = std::future::pending::<()>();
+    let sigterm = platform::sigterm();
 
     tokio::select! {
         result = cleanup => {
