@@ -56,6 +56,7 @@ link = "https://..."   # public url of the blog, required if rss is enabled
 [dirs]
 posts = "posts"        # where posts are stored
 media = "media"        # directory served under /media/
+static = "static"      # directory server under /static/ (css and js)
 
 [http]
 host = "0.0.0.0"       # ip to listen on
@@ -126,15 +127,21 @@ every post **must** begin with a **valid** front matter. else it wont be listed
 in / & /posts, and when you navigate to it, you will be met with an error page.
 the error page will tell you what the problem is.
 
-example:
+full example:
 
 ```md
 ---
-title: "README"
-description: "the README.md file of this project"
-author: "slonkazoid"
-created_at: 2024-04-18T04:15:26+03:00
-#modified_at: ... # see above
+title: "My first post" # title of the post
+description: "The first post on this awesome blog!" # short description of the post
+author: "Blubber256" # author of the post
+icon: "/media/first-post/icon.png" # icon/thumbnail of post used in embeds
+color: "#00aacc" # color of post, also used in embeds
+created_at: 2024-04-18T04:15:26+03:00 # date of writing, this is highly
+# recommended if you are on a system which doesnt have btime (like musl),
+# because this is fetched from file stats by default
+#modified_at: ... # see above. this is also fetched from the filesystem
+tags: # tags, or keywords, used in meta and also in the ui
+ - lifestyle
 ---
 ```
 
