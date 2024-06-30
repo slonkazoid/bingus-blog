@@ -45,6 +45,7 @@ struct PostTemplate {
     markdown_access: bool,
     df: DateFormat,
     js: bool,
+    color: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -148,6 +149,11 @@ async fn post(
 ) -> AppResult<Response> {
     match posts.get_post(&name).await? {
         ReturnedPost::Rendered(meta, rendered, rendered_in) => {
+            let color = meta
+                .color
+                .as_ref()
+                .or(config.default_color.as_ref())
+                .cloned();
             let page = PostTemplate {
                 meta,
                 rendered,
@@ -155,6 +161,7 @@ async fn post(
                 markdown_access: config.markdown_access,
                 df: config.date_format.clone(),
                 js: config.js_enable,
+                color,
             };
 
             Ok(page.into_response())

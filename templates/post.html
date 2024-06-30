@@ -20,7 +20,7 @@
 		<meta property="twitter:image:src" content="{{ url }}" />
 		{% when None %} {% endmatch %}
 		<!-- prettier is annoying -->
-		{% match meta.color %} {% when Some with (color) %}
+		{% match color %} {% when Some with (color) %}
 		<meta name="theme-color" content="{{ color }}" />
 		{% when None %} {% endmatch %}
 		<title>{{ meta.title }}</title>

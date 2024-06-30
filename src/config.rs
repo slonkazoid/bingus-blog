@@ -75,6 +75,7 @@ pub struct Config {
     pub markdown_access: bool,
     pub date_format: DateFormat,
     pub js_enable: bool,
+    pub default_color: Option<String>,
     pub rss: RssConfig,
     pub dirs: DirsConfig,
     pub http: HttpConfig,
@@ -90,6 +91,7 @@ impl Default for Config {
             markdown_access: true,
             date_format: Default::default(),
             js_enable: true,
+            default_color: Some("#f5c2e7".into()),
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it
             // writing my own serialize and deserialize implementations.. spending
