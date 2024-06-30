@@ -7,10 +7,21 @@
 		<meta name="author" content="{{ meta.author }}" />
 		<meta name="keywords" content="{{ meta.tags|join(", ") }}" />
 		<meta name="description" content="{{ meta.title }}" />
+		<!-- you know what I really love? platforms like discord
+			favoring twitter embeds over the open standard. to color
+			your embed or have large images, you have to do _this_. lmao -->
 		<meta property="og:title" content="{{ meta.title }}" />
+		<meta property="twitter:title" content="{{ meta.title }}" />
 		<meta property="og:description" content="{{ meta.description }}" />
+		<meta property="twitter:description" content="{{ meta.description }}" />
 		{% match meta.icon %} {% when Some with (url) %}
 		<meta property="og:image" content="{{ url }}" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta property="twitter:image:src" content="{{ url }}" />
+		{% when None %} {% endmatch %}
+		<!-- prettier is annoying -->
+		{% match meta.color %} {% when Some with (color) %}
+		<meta name="theme-color" content="{{ color }}" />
 		{% when None %} {% endmatch %}
 		<title>{{ meta.title }}</title>
 		<link rel="stylesheet" href="/static/style.css" />

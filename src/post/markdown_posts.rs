@@ -27,6 +27,7 @@ struct FrontMatter {
     pub description: String,
     pub author: String,
     pub icon: Option<String>,
+    pub color: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     #[serde(default)]
@@ -46,6 +47,7 @@ impl FrontMatter {
             description: self.description,
             author: self.author,
             icon: self.icon,
+            color: self.color,
             created_at: self.created_at.or_else(|| created.map(|t| t.into())),
             modified_at: self.modified_at.or_else(|| modified.map(|t| t.into())),
             tags: self.tags.into_iter().collect(),
