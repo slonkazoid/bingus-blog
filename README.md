@@ -17,7 +17,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [ ] blog thumbnail and favicon
 - [x] alt text for post icon
 - [ ] extend syntect options
-- [ ] general cleanup of code
+- [x] general cleanup of code
 - [ ] better error reporting and error pages
 - [ ] better tracing
 - [x] cache cleanup task
