@@ -34,6 +34,7 @@ struct IndexTemplate<'a> {
     rss: bool,
     df: &'a DateFormat,
     js: bool,
+    color: Option<&'a str>,
 }
 
 #[derive(Template)]
@@ -70,6 +71,7 @@ async fn index<'a>(
         rss: config.rss.enable,
         df: &config.date_format,
         js: config.js_enable,
+        color: config.default_color.as_deref(),
     }
     .into_response())
 }

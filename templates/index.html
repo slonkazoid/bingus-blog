@@ -7,11 +7,16 @@
 		<meta name="description" content="{{ title }}" />
 		<meta property="og:title" content="{{ title }}" />
 		<meta property="og:description" content="{{ description }}" />
+		{% match color %} {% when Some with (color) %}
+		<meta name="theme-color" content="{{ color }}" />
+		{% when None %} {% endmatch %}
 		<title>{{ title }}</title>
 		<link rel="stylesheet" href="/static/style.css" />
 		{% if rss %}
 		<link rel="alternate" type="application/rss+xml" title="{{ title }}" href="/feed.xml" />
-		{% endif %} {% if js %}
+		{% endif %}
+		<!-- prettier-br -->
+		{% if js %}
 		<script src="/static/main.js" defer></script>
 		{% endif %}
 	</head>
