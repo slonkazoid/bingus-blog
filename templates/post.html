@@ -18,6 +18,11 @@
 		<meta property="og:image" content="{{ url }}" />
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta property="twitter:image:src" content="{{ url }}" />
+		{% match meta.icon_alt %} {% when Some with (alt) %}
+		<meta property="og:image:alt" content="{{ alt }}" />
+		<meta property="twitter:image:alt" content="{{ alt }}" />
+		{% when None %} {% endmatch %}
+		<!-- prettier-br -->
 		{% when None %} {% endmatch %}
 		<!-- prettier is annoying -->
 		{% match color %} {% when Some with (color) %}

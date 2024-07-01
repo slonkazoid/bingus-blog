@@ -17,7 +17,7 @@ pub struct PostMetadata {
     pub description: String,
     pub author: String,
     pub icon: Option<String>,
-    //pub icon_alt: Option<String>,
+    pub icon_alt: Option<String>,
     pub color: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,

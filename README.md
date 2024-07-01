@@ -1,7 +1,7 @@
 ---
-title: "README"
-description: "the README.md file of this project"
-author: "slonkazoid"
+title: README
+description: the README.md file of this project
+author: slonkazoid
 created_at: 2024-04-18T04:15:26+03:00
 ---
 
@@ -15,7 +15,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [x] finish writing this document
 - [x] document config
 - [ ] blog thumbnail and favicon
-- [ ] alt text for post icon
+- [x] alt text for post icon
 - [ ] extend syntect options
 - [ ] general cleanup of code
 - [ ] better error reporting and error pages
@@ -133,10 +133,11 @@ full example:
 
 ```md
 ---
-title: "My first post" # title of the post
-description: "The first post on this awesome blog!" # short description of the post
-author: "Blubber256" # author of the post
-icon: "/media/first-post/icon.png" # icon/thumbnail of post used in embeds
+title: My first post # title of the post
+description: The first post on this awesome blog! # short description of the post
+author: Blubber256 # author of the post
+icon: /media/first-post/icon.png # icon/thumbnail of post used in embeds
+icon_alt: Picture of a computer running DOOM
 color: "#00aacc" # color of post, also used in embeds
 created_at: 2024-04-18T04:15:26+03:00 # date of writing, this is highly
 # recommended if you are on a system which doesnt have btime (like musl),
