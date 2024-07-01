@@ -185,3 +185,13 @@ across boots, also at the cost of even more RAM usage.
 
 the compression reduced a 3.21 MB file cache into 0.18 MB with almost instantly.
 there is basically no good reason to not have compression on.
+
+## Contributing
+
+make sure your changes don't cause problems on at least the following browsers:
+
+- links2
+- lynx
+- w3m
+- Firefox
+- Chromium
