@@ -25,7 +25,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [x] (de)compress cache with zstd on startup/shutdown
 - [ ] make date parsing less strict
 - [x] make date formatting better
-- [ ] date formatting respects user timezone
+- [x] date formatting respects user timezone
 - [x] clean up imports and require less features
 - [ ] improve home page
 - [x] tags
