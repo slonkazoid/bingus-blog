@@ -27,25 +27,25 @@ pub struct AppState {
 
 #[derive(Template)]
 #[template(path = "index.html")]
-struct IndexTemplate {
-    title: String,
-    description: String,
+struct IndexTemplate<'a> {
+    title: &'a str,
+    description: &'a str,
     posts: Vec<PostMetadata>,
     rss: bool,
-    df: DateFormat,
+    df: &'a DateFormat,
     js: bool,
 }
 
 #[derive(Template)]
 #[template(path = "post.html")]
-struct PostTemplate {
-    meta: PostMetadata,
+struct PostTemplate<'a> {
+    meta: &'a PostMetadata,
     rendered: String,
     rendered_in: RenderStats,
     markdown_access: bool,
-    df: DateFormat,
+    df: &'a DateFormat,
     js: bool,
-    color: Option<String>,
+    color: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -55,22 +55,23 @@ struct QueryParams {
     num_posts: Option<usize>,
 }
 
-async fn index(
+async fn index<'a>(
     State(AppState { config, posts }): State<AppState>,
     Query(query): Query<QueryParams>,
-) -> AppResult<IndexTemplate> {
+) -> AppResult<Response> {
     let posts = posts
         .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
         .await?;
 
     Ok(IndexTemplate {
-        title: config.title.clone(),
-        description: config.description.clone(),
+        title: &config.title,
+        description: &config.description,
         posts,
         rss: config.rss.enable,
-        df: config.date_format.clone(),
+        df: &config.date_format,
         js: config.js_enable,
-    })
+    }
+    .into_response())
 }
 
 async fn all_posts(
@@ -148,24 +149,16 @@ async fn post(
     Path(name): Path<String>,
 ) -> AppResult<Response> {
     match posts.get_post(&name).await? {
-        ReturnedPost::Rendered(meta, rendered, rendered_in) => {
-            let color = meta
-                .color
-                .as_ref()
-                .or(config.default_color.as_ref())
-                .cloned();
-            let page = PostTemplate {
-                meta,
-                rendered,
-                rendered_in,
-                markdown_access: config.markdown_access,
-                df: config.date_format.clone(),
-                js: config.js_enable,
-                color,
-            };
-
-            Ok(page.into_response())
+        ReturnedPost::Rendered(ref meta, rendered, rendered_in) => Ok(PostTemplate {
+            meta,
+            rendered,
+            rendered_in,
+            markdown_access: config.markdown_access,
+            df: &config.date_format,
+            js: config.js_enable,
+            color: meta.color.as_deref().or(config.default_color.as_deref()),
         }
+        .into_response()),
         ReturnedPost::Raw(body, content_type) => {
             Ok(([(CONTENT_TYPE, content_type)], body).into_response())
         }
