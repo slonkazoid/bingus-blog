@@ -9,7 +9,7 @@ function initialSort(source, target) {
 		let title = post.firstElementChild.innerText;
 		posts.push([title, post.cloneNode(true)]);
 	}
-	posts.sort(([a, _1], [b, _2]) => a.toLocaleLowerCase() > b.toLocaleLowerCase());
+	posts.sort(([a, _1], [b, _2]) => a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase()));
 	for (let [_, post] of posts) {
 		target.appendChild(post);
 	}
