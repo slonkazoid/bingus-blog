@@ -55,6 +55,8 @@
 			{% let tags = posts|collect_tags %}<!-- prettier-br -->
 			{% if !tags.is_empty() %}
 			<h2>tags</h2>
+			<b><a href="/">clear tags</a></b>
+			<br />
 			{% endif %}<!-- prettier-br -->
 			{% for tag in tags %}
 			<a href="/?tag={{ tag.0 }}" title="view all posts with this tag">{{ tag.0 }}</a>
