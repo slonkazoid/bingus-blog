@@ -3,5 +3,5 @@
 /media/*
 /posts/*
 !/posts/README.md
-/.slbg-cache
+/cache
 /config.toml
