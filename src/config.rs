@@ -67,14 +67,24 @@ pub enum DateFormat {
     Strftime(String),
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[repr(u8)]
+pub enum Sort {
+    #[default]
+    Date,
+    Name,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
     pub title: String,
     pub description: String,
     pub markdown_access: bool,
-    pub date_format: DateFormat,
     pub js_enable: bool,
+    pub date_format: DateFormat,
+    pub default_sort: Sort,
     pub default_color: Option<String>,
     pub rss: RssConfig,
     pub dirs: DirsConfig,
@@ -89,8 +99,9 @@ impl Default for Config {
             title: "bingus-blog".into(),
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
             markdown_access: true,
-            date_format: Default::default(),
             js_enable: true,
+            date_format: Default::default(),
+            default_sort: Default::default(),
             default_color: Some("#f5c2e7".into()),
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it

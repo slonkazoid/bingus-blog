@@ -112,6 +112,11 @@ div.post {
 	grid-row: 3;
 }
 
+#sort {
+	display: inline-block;
+	margin-bottom: 1rem;
+}
+
 /* BEGIN cool effect everyone liked */
 
 body {

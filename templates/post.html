@@ -5,7 +5,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="author" content="{{ meta.author }}" />
-		<meta name="keywords" content="{{ meta.tags|join(", ") }}" />
+		<meta name="keywords" content="{{ meta.tags|join_tags_for_meta }}" />
 		<meta name="description" content="{{ meta.title }}" />
 		<!-- you know what I really love? platforms like discord
 			favoring twitter embeds over the open standard. to color

@@ -50,3 +50,7 @@ pub fn collect_tags(posts: &Vec<PostMetadata>) -> Result<Vec<(String, u64)>, ask
 
     Ok(tags)
 }
+
+pub fn join_tags_for_meta(tags: &Vec<String>) -> Result<String, askama::Error> {
+    Ok(tags.join(", "))
+}

@@ -14,7 +14,7 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span, Span};
 
-use crate::config::{Config, DateFormat};
+use crate::config::{Config, DateFormat, Sort};
 use crate::error::{AppError, AppResult};
 use crate::filters;
 use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats, ReturnedPost};
@@ -35,6 +35,7 @@ struct IndexTemplate<'a> {
     df: &'a DateFormat,
     js: bool,
     color: Option<&'a str>,
+    sort: Sort,
 }
 
 #[derive(Template)]
@@ -72,6 +73,7 @@ async fn index<'a>(
         df: &config.date_format,
         js: config.js_enable,
         color: config.default_color.as_deref(),
+        sort: config.default_sort,
     }
     .into_response())
 }

@@ -43,11 +43,12 @@ title = "bingus-blog"  # title of the blog
 description = "blazingly fast markdown blog software written in rust memory safe"
 markdown_access = true # allow users to see the raw markdown of a post
                        # endpoint: /posts/<name>.md
+js_enable = true       # enable javascript (required for below 2 options)
 date_format = "RFC3339" # format string used to format dates in the backend
                        # it's highly recommended to leave this as default,
                        # so the date can be formatted by the browser.
                        # format: https://docs.rs/chrono/latest/chrono/format/strftime/index.html#specifiers
-js_enable = true       # enable javascript (required for above)
+default_sort = "date"  # default sorting method ("date" or "name")
 default_color = "#f5c2e7" # default embed color, optional
 
 [rss]
@@ -144,7 +145,7 @@ created_at: 2024-04-18T04:15:26+03:00 # date of writing, this is highly
 # because this is fetched from file stats by default
 #modified_at: ... # see above. this is also fetched from the filesystem
 tags: # tags, or keywords, used in meta and also in the ui
- - lifestyle
+    - lifestyle
 ---
 ```
 
@@ -165,11 +166,11 @@ standard. examples of valid and invalid dates:
 
 ## Routes
 
-- `GET /`: index page, lists posts
-- `GET /posts`: returns a list of all posts with metadata in JSON format
-- `GET /posts/<name>`: view a post
-- `GET /posts/<name>.md`: view the raw markdown of a post
-- `GET /post/*`: redirects to `/posts/*`
+-   `GET /`: index page, lists posts
+-   `GET /posts`: returns a list of all posts with metadata in JSON format
+-   `GET /posts/<name>`: view a post
+-   `GET /posts/<name>.md`: view the raw markdown of a post
+-   `GET /post/*`: redirects to `/posts/*`
 
 ## Cache
 
@@ -190,8 +191,8 @@ there is basically no good reason to not have compression on.
 
 make sure your changes don't cause problems on at least the following browsers:
 
-- links2
-- lynx
-- w3m
-- Firefox
-- Chromium
+-   links2
+-   lynx
+-   w3m
+-   Firefox
+-   Chromium

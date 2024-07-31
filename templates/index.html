@@ -17,6 +17,7 @@
 		{% endif %}
 		<!-- prettier-br -->
 		{% if js %}
+		<script src="/static/date.js" defer></script>
 		<script src="/static/main.js" defer></script>
 		{% endif %}
 	</head>
@@ -25,20 +26,31 @@
 			<h1>{{ title }}</h1>
 			<p>{{ description }}</p>
 			<h2>posts</h2>
-			<!-- prettier-ignore -->
 			<div>
-				{% if posts.is_empty() %}
-				there are no posts right now. check back later!
+				{% if posts.is_empty() %}<!-- prettier-br -->
+				there are no posts right now. check back later!<!-- prettier-br -->
+				{% else %}<!-- prettier-br -->
+				{% if js %}<!-- prettier-br -->
+				sort by:
+				<form id="sort">
+					<input type="radio" name="sort" id="sort-date" value="date" {% if sort == Sort::Date %} checked {% endif %} />
+					<label for="sort-date">date</label>
+					<input type="radio" name="sort" id="sort-name" value="name" {% if sort == Sort::Name %} checked {% endif %} />
+					<label for="sort-name">name</label>
+				</form>
 				{% endif %}<!-- prettier-br -->
-				{% for post in posts %}
-				<div class="post">
-					<a href="/posts/{{ post.name }}"><b>{{ post.title }}</b></a>
-					<span class="post-author">- by {{ post.author }}</span>
-					<br />
-					{{ post.description }}<br />
-					{% call macros::table(post) %}
+				<div id="posts">
+					{% for post in posts %}
+					<div class="post">
+						<a href="/posts/{{ post.name }}"><b>{{ post.title }}</b></a>
+						<span class="post-author">- by {{ post.author }}</span>
+						<br />
+						{{ post.description }}<br />
+						{% call macros::table(post) %}
+					</div>
+					{% endfor %}
 				</div>
-				{% endfor %}
+				{% endif %}<!-- prettier-br -->
 			</div>
 			{% let tags = posts|collect_tags %}<!-- prettier-br -->
 			{% if !tags.is_empty() %}
