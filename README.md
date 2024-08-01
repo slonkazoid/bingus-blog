@@ -15,7 +15,7 @@ blazingly fast markdown blog software written in rust memory safe
 - [x] finish writing this document
 - [x] document config
 - [ ] blog thumbnail and favicon
-- [ ] fix webkit dates (what.)
+- [x] fix webkit dates (what.)
 - [ ] sort asc/desc
 - [x] alt text for post icon
 - [ ] extend syntect options
