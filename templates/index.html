@@ -32,8 +32,8 @@
 				there are no posts right now. check back later!<!-- prettier-br -->
 				{% else %}<!-- prettier-br -->
 				{% if js %}<!-- prettier-br -->
-				sort by:
-				<form id="sort">
+				<form id="sort" style="display: none">
+					sort by: <br />
 					<input type="radio" name="sort" id="sort-date" value="date" {% if sort == Sort::Date %} checked {% endif %} />
 					<label for="sort-date">date</label>
 					<input type="radio" name="sort" id="sort-name" value="name" {% if sort == Sort::Name %} checked {% endif %} />
