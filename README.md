@@ -207,10 +207,10 @@ there is basically no good reason to not have compression on.
 
 ## Contributing
 
-make sure your changes don't cause problems on at least the following browsers:
+make sure your changes don't break firefox, chromium, text-based browsers, and webkit support
 
--   links2
--   lynx
--   w3m
--   Firefox
--   Chromium
+### Feature Requests
+
+i want this project to be a good and usable piece of software, so i implement feature requests provided they fit the project and it's values.
+
+most just ping me on discord with feature requests, but if your request is non-trivial, please create an issue [here](https://git.slonk.ing/slonk/bingus-blog/issues).
