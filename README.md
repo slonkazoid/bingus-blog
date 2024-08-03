@@ -166,6 +166,22 @@ standard. examples of valid and invalid dates:
 -                           # everything else is also invalid
 ```
 
+## Custom Content (CSS, HTML, JS)
+
+though you can modify the content and commit it so you still get changes from
+upstream with minimal problems.  
+you can edit the css and js however you want but changing the html requires a
+recompilation as it is made from compile-time parsed templates.
+
+bingus-blog currently loads css files from `/static/custom`:
+
+- `/static/custom/style.css` for all pages
+- `/static/custom/post.css` for posts
+- `/static/custom/error.css` for the error page
+
+you can create a `custom` directory inside the `static_dir` you set in the
+config and put the css files there.
+
 ## Routes
 
 -   `GET /`: index page, lists posts
