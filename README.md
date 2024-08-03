@@ -168,11 +168,11 @@ standard. examples of valid and invalid dates:
 
 ## Routes
 
--   `GET /`: index page, lists posts
--   `GET /posts`: returns a list of all posts with metadata in JSON format
--   `GET /posts/<name>`: view a post
--   `GET /posts/<name>.md`: view the raw markdown of a post
--   `GET /post/*`: redirects to `/posts/*`
+- `GET /`: index page, lists posts
+- `GET /posts`: returns a list of all posts with metadata in JSON format
+- `GET /posts/<name>`: view a post
+- `GET /posts/<name>.md`: view the raw markdown of a post
+- `GET /post/*`: redirects to `/posts/*`
 
 ## Cache
 
@@ -191,10 +191,13 @@ there is basically no good reason to not have compression on.
 
 ## Contributing
 
-make sure your changes don't break firefox, chromium, text-based browsers, and webkit support
+make sure your changes don't break firefox, chromium,text-based browsers,
+and webkit support
 
 ### Feature Requests
 
-i want this project to be a good and usable piece of software, so i implement feature requests provided they fit the project and it's values.
+i want this project to be a good and usable piece of software, so i implement
+feature requests provided they fit the project and it's values.
 
-most just ping me on discord with feature requests, but if your request is non-trivial, please create an issue [here](https://git.slonk.ing/slonk/bingus-blog/issues).
+most just ping me on discord with feature requests, but if your request is
+non-trivial, please create an issue [here](https://git.slonk.ing/slonk/bingus-blog/issues).
