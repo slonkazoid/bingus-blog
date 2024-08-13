@@ -1,0 +1,18 @@
+<div class="table">
+	{{#if (ne this.created_at null)}}
+		<div class="created">written</div>
+		<div class="created value">{{>span_date date_time=this.created_at}}</div>
+	{{/if}}
+	{{#if (ne this.modified_at null)}}
+		<div class="modified">last modified</div>
+		<div class="modified value">{{>span_date date_time=this.modified_at}}</div>
+	{{/if}}
+	{{#if (gt (len this.tags) 0)}}
+		<div class="tags">tags</div>
+		<div class="tags value">
+			{{#each this.tags}}
+				<a href="/?tag={{this}}" title="view all posts with this tag">{{this}}</a>
+			{{/each}}
+		</div>
+	{{/if}}
+</div>

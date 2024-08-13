@@ -1,0 +1,63 @@
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="description" content="{{title}}" />
+		<meta property="og:title" content="{{title}}" />
+		<meta property="og:description" content="{{description}}" />
+		<meta name="keywords" content="{{joined_tags}}" />
+		{{#if (ne color null)}}
+			<meta name="theme-color" content="{{color}}" />
+		{{/if}}
+		<title>{{title}}</title>
+		<link rel="stylesheet" href="/static/style.css" />
+		{{#if rss}}
+			<link rel="alternate" type="application/rss+xml" title="{{title}}" href="/feed.xml" />
+		{{/if}}
+		{{#if js}}
+			<script src="/static/date.js" defer></script>
+			<script src="/static/sort.js" defer></script>
+			<script src="/static/main.js" defer></script>
+		{{/if}}
+	</head>
+	<body>
+		<main>
+			<h1>{{title}}</h1>
+			<p>{{description}}</p>
+			<h2>posts</h2>
+			<div>
+				{{#if js}}
+					<form id="sort" style="display: none">
+						sort by: {{sort}}
+						<br />
+						<input type="radio" name="sort" id="sort-date" value="date" {{#if (eq sort "date")}}checked{{/if}} />
+						<label for="sort-date">date</label>
+						<input type="radio" name="sort" id="sort-name" value="name" {{#if (eq sort "name")}}checked{{/if}} />
+						<label for="sort-name">name</label>
+					</form>
+				{{/if}}
+				{{#each posts}}
+					<div id="posts">
+						<div class="post">
+							<a href="/posts/{{name}}"><b>{{title}}</b></a>
+							<span class="post-author">- by {{author}}</span>
+							<br />
+							{{description}}<br />
+							{{>post_table post df=@root.df}}
+						</div>
+					</div>
+				{{else}} there are no posts right now. check back later! {{/each}}
+			</div>
+
+			{{#if (gt (len tags) 0)}}
+				<h2>tags</h2>
+				<b><a href="/">clear tags</a></b>
+				<br />
+			{{/if}}
+			{{#each tags}}
+				<a href="/?tag={{@key}}" title="view all posts with this tag">{{@key}}</a>
+				<span class="post-author">- {{this}} post{{#if (ne this 1)}}s{{/if}}</span><br />
+			{{/each}}
+		</main>
+	</body>
+</html>

@@ -49,8 +49,8 @@ pub struct HttpConfig {
 pub struct DirsConfig {
     pub posts: PathBuf,
     pub media: PathBuf,
-    #[serde(rename = "static")]
-    pub _static: PathBuf,
+    pub custom_static: PathBuf,
+    pub custom_templates: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -102,7 +102,7 @@ impl Default for Config {
             js_enable: true,
             date_format: Default::default(),
             default_sort: Default::default(),
-            default_color: Some("#f5c2e7".into()),
+            default_color: None,
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it
             // writing my own serialize and deserialize implementations.. spending
@@ -126,7 +126,8 @@ impl Default for DirsConfig {
         Self {
             posts: "posts".into(),
             media: "media".into(),
-            _static: "static".into(),
+            custom_static: "static".into(),
+            custom_templates: "templates".into(),
         }
     }
 }

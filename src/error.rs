@@ -53,6 +53,8 @@ pub type AppResult<T> = Result<T, AppError>;
 pub enum AppError {
     #[error("failed to fetch post: {0}")]
     PostError(#[from] PostError),
+    #[error(transparent)]
+    HandlebarsError(#[from] handlebars::RenderError),
     #[error("rss is disabled")]
     RssDisabled,
     #[error(transparent)]
@@ -75,12 +77,9 @@ struct ErrorTemplate {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            AppError::PostError(err) => match err {
-                PostError::NotFound(_) => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            },
+            AppError::PostError(PostError::NotFound(_)) => StatusCode::NOT_FOUND,
             AppError::RssDisabled => StatusCode::FORBIDDEN,
-            AppError::UrlError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
             status_code,

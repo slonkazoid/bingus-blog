@@ -1,15 +1,17 @@
-#![feature(let_chains)]
+#![feature(let_chains, pattern)]
 
 mod app;
 mod config;
 mod error;
-mod filters;
 mod hash_arc_store;
+mod helpers;
 mod markdown_render;
 mod platform;
 mod post;
 mod ranged_i128_visitor;
+mod serve_dir_included;
 mod systemtime_as_secs;
+mod templates;
 
 use std::future::IntoFuture;
 use std::net::SocketAddr;
@@ -19,31 +21,40 @@ use std::time::Duration;
 
 use color_eyre::eyre::{self, Context};
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tokio::task::JoinSet;
+use tokio::time::Instant;
 use tokio::{select, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::level_filters::LevelFilter;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
 use crate::app::AppState;
 use crate::post::{MarkdownPosts, PostManager};
+use crate::templates::new_registry;
+use crate::templates::watcher::watch_templates;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    #[cfg(feature = "tokio-console")]
-    console_subscriber::init();
     color_eyre::install()?;
-    #[cfg(not(feature = "tokio-console"))]
-    tracing_subscriber::registry()
+    let reg = tracing_subscriber::registry();
+    #[cfg(feature = "tokio-console")]
+    let reg = reg
         .with(
             EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
+                .with_default_directive(LevelFilter::TRACE.into())
                 .from_env_lossy(),
         )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+        .with(console_subscriber::spawn());
+    #[cfg(not(feature = "tokio-console"))]
+    let reg = reg.with(
+        EnvFilter::builder()
+            .with_default_directive(LevelFilter::INFO.into())
+            .from_env_lossy(),
+    );
+    reg.with(tracing_subscriber::fmt::layer()).init();
 
     let config = Arc::new(
         config::load()
@@ -56,22 +67,45 @@ async fn main() -> eyre::Result<()> {
     let mut tasks = JoinSet::new();
     let cancellation_token = CancellationToken::new();
 
+    let start = Instant::now();
+    // NOTE: use tokio::task::spawn_blocking if this ever turns into a concurrent task
+    let mut reg = new_registry(&config.dirs.custom_templates)
+        .context("failed to create handlebars registry")?;
+    reg.register_helper("date", Box::new(helpers::date));
+    reg.register_helper("duration", Box::new(helpers::duration));
+    debug!(duration = ?start.elapsed(), "registered all templates");
+
+    let reg = Arc::new(RwLock::new(reg));
+
+    let watcher_token = cancellation_token.child_token();
+
     let posts = Arc::new(MarkdownPosts::new(Arc::clone(&config)).await?);
     let state = AppState {
         config: Arc::clone(&config),
         posts: Arc::clone(&posts),
+        reg: Arc::clone(&reg),
     };
 
+    debug!("setting up watcher");
+    tasks.spawn(
+        watch_templates(
+            config.dirs.custom_templates.clone(),
+            watcher_token.clone(),
+            reg,
+        )
+        .instrument(info_span!("custom_template_watcher")),
+    );
+
     if config.cache.enable && config.cache.cleanup {
-        if let Some(t) = config.cache.cleanup_interval {
+        if let Some(millis) = config.cache.cleanup_interval {
             let posts = Arc::clone(&posts);
             let token = cancellation_token.child_token();
             debug!("setting up cleanup task");
             tasks.spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_millis(t));
+                let mut interval = tokio::time::interval(Duration::from_millis(millis));
                 loop {
                     select! {
-                        _ = token.cancelled() => break,
+                        _ = token.cancelled() => break Ok(()),
                         _ = interval.tick() => {
                             posts.cleanup().await
                         }
@@ -122,7 +156,10 @@ async fn main() -> eyre::Result<()> {
         cancellation_token.cancel();
         server.await.context("failed to serve app")?;
         while let Some(task) = tasks.join_next().await {
-            task.context("failed to join task")?;
+            let res = task.context("failed to join task")?;
+            if let Err(err) = res {
+                error!("task failed with error: {err}");
+            }
         }
 
         drop(state);
