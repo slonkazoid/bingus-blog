@@ -102,7 +102,7 @@ impl Default for Config {
             js_enable: true,
             date_format: Default::default(),
             default_sort: Default::default(),
-            default_color: Some("#f5c2e7".into()),
+            default_color: None,
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it
             // writing my own serialize and deserialize implementations.. spending

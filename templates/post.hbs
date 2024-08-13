@@ -1,0 +1,71 @@
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="author" content="{{meta.author}}" />
+		<meta name="keywords" content="{{joined_tags}}" />
+		<meta name="description" content="{{meta.title}}" />
+		<!-- you know what I really love? platforms like discord
+			favoring twitter embeds over the open standard. to color
+			your embed or have large images, you have to do _this_. lmao -->
+		<meta property="og:title" content="{{meta.title}}" />
+		<meta property="twitter:title" content="{{meta.title}}" />
+		<meta property="og:description" content="{{meta.description}}" />
+		<meta property="twitter:description" content="{{meta.description}}" />
+		{{#if (ne meta.icon null)}}
+			<meta property="og:image" content="{{meta.icon}}" />
+			<meta name="twitter:card" content="summary_large_image" />
+			<meta property="twitter:image:src" content="{{meta.icon}}" />
+			{{#if (ne meta.icon_alt null)}}
+				<meta property="og:image:alt" content="{{meta.icon_alt}}" />
+				<meta property="twitter:image:alt" content="{{meta.icon_alt}}" />
+			{{/if}}{{/if}}
+		{{#if (ne color null)}}
+			<meta name="theme-color" content="{{meta.color}}" />
+		{{/if}}
+		<title>{{meta.title}}</title>
+		<link rel="stylesheet" href="/static/style.css" />
+		<link rel="stylesheet" href="/static/post.css" />
+		<link rel="stylesheet" href="/static/custom/style.css" />
+		<link rel="stylesheet" href="/static/custom/post.css" />
+		{{#if js}}
+			<script src="/static/date.js" defer></script>
+			<script src="/static/main.js" defer></script>
+		{{/if}}
+	</head>
+	<body>
+		<main>
+			<h1 class="post-title">
+				{{meta.title}}
+				<span class="post-author">- by {{meta.author}}</span>
+			</h1>
+			<p class="post-desc">{{meta.description}}</p>
+			<div class="post">
+				{{>post_table meta df=@root.df}}
+				<a href="/posts/{{meta.name}}">link</a><br />
+				<a href="/">back to home</a>
+			</div>
+			<hr />
+			{{{rendered}}}
+		</main>
+		<footer>
+			{{#each rendered_in}}
+				{{#if (eq @key "ParsedAndRendered")}}
+					<span class="tooltipped" title="parsing took {{duration this.[1]}}">parsed</span>
+					and
+					<span class="tooltipped" title="rendering took {{duration this.[2]}}">rendered</span>
+					in
+					{{duration this.[0]}}
+
+				{{else if (eq @key "Cached")}}
+					retrieved from cache in
+					{{duration this}}
+				{{/if}}
+			{{/each}}
+			{{#if markdown_access}}
+				-
+				<a href="/posts/{{meta.name}}.md">view raw</a>
+			{{/if}}
+		</footer>
+	</body>
+</html>

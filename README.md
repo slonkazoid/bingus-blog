@@ -51,7 +51,7 @@ date_format = "RFC3339" # format string used to format dates in the backend
                        # so the date can be formatted by the browser.
                        # format: https://docs.rs/chrono/latest/chrono/format/strftime/index.html#specifiers
 default_sort = "date"  # default sorting method ("date" or "name")
-default_color = "#f5c2e7" # default embed color, optional
+#default_color = "#f5c2e7" # default embed color, optional
 
 [rss]
 enable = false         # serve an rss field under /feed.xml

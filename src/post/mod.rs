@@ -24,6 +24,7 @@ pub struct PostMetadata {
     pub tags: Vec<String>,
 }
 
+#[derive(Serialize)]
 pub enum RenderStats {
     Cached(Duration),
     // format: Total, Parsed in, Rendered in
