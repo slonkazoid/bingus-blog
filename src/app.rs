@@ -9,10 +9,12 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use handlebars::Handlebars;
+use include_dir::{include_dir, Dir};
 use rss::{Category, ChannelBuilder, ItemBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tokio::sync::RwLock;
+use tower::service_fn;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span, Span};
@@ -20,6 +22,9 @@ use tracing::{info, info_span, Span};
 use crate::config::{Config, DateFormat, Sort};
 use crate::error::{AppError, AppResult};
 use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats, ReturnedPost};
+use crate::serve_dir_included::handle;
+
+const STATIC: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");
 
 #[derive(Clone)]
 #[non_exhaustive]
@@ -252,7 +257,9 @@ pub fn new(config: &Config) -> Router<AppState> {
         .route("/feed.xml", get(rss))
         .nest_service(
             "/static",
-            ServeDir::new(&config.dirs._static).precompressed_gzip(),
+            ServeDir::new(&config.dirs.custom_static)
+                .precompressed_gzip()
+                .fallback(service_fn(|req| handle(req, &STATIC))),
         )
         .nest_service("/media", ServeDir::new(&config.dirs.media))
         .layer(

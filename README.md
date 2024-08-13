@@ -61,8 +61,9 @@ link = "https://..."   # public url of the blog, required if rss is enabled
 [dirs]
 posts = "posts"        # where posts are stored
 media = "media"        # directory served under /media/
-static = "static"      # directory server under /static/ (css and js)
-
+custom_templates = "custom/templates" # custom templates dir
+custom_static = "custom/static"       # custom static dir
+                       # see CUSTOM.md for documentation
 [http]
 host = "0.0.0.0"       # ip to listen on
 port = 3000            # port to listen on

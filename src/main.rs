@@ -1,4 +1,4 @@
-#![feature(let_chains)]
+#![feature(let_chains, pattern)]
 
 mod app;
 mod config;
@@ -9,6 +9,7 @@ mod markdown_render;
 mod platform;
 mod post;
 mod ranged_i128_visitor;
+mod serve_dir_included;
 mod systemtime_as_secs;
 mod templates;
 

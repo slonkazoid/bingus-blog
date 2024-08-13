@@ -49,8 +49,8 @@ pub struct HttpConfig {
 pub struct DirsConfig {
     pub posts: PathBuf,
     pub media: PathBuf,
-    #[serde(rename = "static")]
-    pub _static: PathBuf,
+    pub custom_static: PathBuf,
+    pub custom_templates: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -126,7 +126,8 @@ impl Default for DirsConfig {
         Self {
             posts: "posts".into(),
             media: "media".into(),
-            _static: "static".into(),
+            custom_static: "custom/static".into(),
+            custom_templates: "custom/templates".into(),
         }
     }
 }
