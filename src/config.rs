@@ -126,8 +126,8 @@ impl Default for DirsConfig {
         Self {
             posts: "posts".into(),
             media: "media".into(),
-            custom_static: "custom/static".into(),
-            custom_templates: "custom/templates".into(),
+            custom_static: "static".into(),
+            custom_templates: "templates".into(),
         }
     }
 }

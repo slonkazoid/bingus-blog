@@ -10,8 +10,8 @@ customizing the error page, other than CSS, is not supported at this time.
 
 ## Custom Templates
 
-custom templates are loaded from `custom/templates` by default and they are
-written in [Handlebars (the rust variant)](https://crates.io/crates/handlebars)
+custom templates are written in
+[Handlebars (the rust variant)](https://crates.io/crates/handlebars).
 
 the *custom templates directory* has a non-recursive structure:
 
@@ -47,4 +47,3 @@ under `/static`.
 
 the endpoint `/media` is served from `dirs.media`. no other logic or mechanism
 is present.
-

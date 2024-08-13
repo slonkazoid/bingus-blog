@@ -69,8 +69,8 @@ async fn main() -> eyre::Result<()> {
 
     let start = Instant::now();
     // NOTE: use tokio::task::spawn_blocking if this ever turns into a concurrent task
-    let mut reg =
-        new_registry("custom/templates").context("failed to create handlebars registry")?;
+    let mut reg = new_registry(&config.dirs.custom_templates)
+        .context("failed to create handlebars registry")?;
     reg.register_helper("date", Box::new(helpers::date));
     reg.register_helper("duration", Box::new(helpers::duration));
     debug!(duration = ?start.elapsed(), "registered all templates");
@@ -88,8 +88,12 @@ async fn main() -> eyre::Result<()> {
 
     debug!("setting up watcher");
     tasks.spawn(
-        watch_templates("custom/templates", watcher_token.clone(), reg)
-            .instrument(info_span!("custom_template_watcher")),
+        watch_templates(
+            config.dirs.custom_templates.clone(),
+            watcher_token.clone(),
+            reg,
+        )
+        .instrument(info_span!("custom_template_watcher")),
     );
 
     if config.cache.enable && config.cache.cleanup {
