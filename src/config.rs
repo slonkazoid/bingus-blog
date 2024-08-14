@@ -78,14 +78,29 @@ pub enum Sort {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
+#[derive(Default)]
+pub struct StyleConfig {
+    pub display_dates: DisplayDates,
+    pub date_format: DateFormat,
+    pub default_sort: Sort,
+    pub default_color: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct DisplayDates {
+    pub creation: bool,
+    pub modification: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
 pub struct Config {
     pub title: String,
     pub description: String,
     pub markdown_access: bool,
     pub js_enable: bool,
-    pub date_format: DateFormat,
-    pub default_sort: Sort,
-    pub default_color: Option<String>,
+    pub style: StyleConfig,
     pub rss: RssConfig,
     pub dirs: DirsConfig,
     pub http: HttpConfig,
@@ -100,9 +115,7 @@ impl Default for Config {
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
             markdown_access: true,
             js_enable: true,
-            date_format: Default::default(),
-            default_sort: Default::default(),
-            default_color: None,
+            style: Default::default(),
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it
             // writing my own serialize and deserialize implementations.. spending
@@ -120,6 +133,16 @@ impl Default for Config {
         }
     }
 }
+
+impl Default for DisplayDates {
+    fn default() -> Self {
+        Self {
+            creation: true,
+            modification: true,
+        }
+    }
+}
+
 
 impl Default for DirsConfig {
     fn default() -> Self {

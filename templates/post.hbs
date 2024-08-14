@@ -21,7 +21,7 @@
 				<meta property="twitter:image:alt" content="{{meta.icon_alt}}" />
 			{{/if}}{{/if}}
 		{{#if (ne color null)}}
-			<meta name="theme-color" content="{{meta.color}}" />
+			<meta name="theme-color" content="{{color}}" />
 		{{/if}}
 		<title>{{meta.title}}</title>
 		<link rel="stylesheet" href="/static/style.css" />
@@ -41,7 +41,7 @@
 			</h1>
 			<p class="post-desc">{{meta.description}}</p>
 			<div class="post">
-				{{>post_table meta df=@root.df}}
+				{{>post_table meta style=@root.style}}
 				<a href="/posts/{{meta.name}}">link</a><br />
 				<a href="/">back to home</a>
 			</div>

@@ -19,7 +19,7 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span, Span};
 
-use crate::config::{Config, DateFormat, Sort};
+use crate::config::{Config, StyleConfig};
 use crate::error::{AppError, AppResult};
 use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats, ReturnedPost};
 use crate::serve_dir_included::handle;
@@ -40,12 +40,10 @@ struct IndexTemplate<'a> {
     description: &'a str,
     posts: Vec<PostMetadata>,
     rss: bool,
-    df: &'a DateFormat,
     js: bool,
-    color: Option<&'a str>,
-    sort: Sort,
     tags: Map<String, serde_json::Value>,
     joined_tags: String,
+    style: &'a StyleConfig,
 }
 
 #[derive(Serialize)]
@@ -54,10 +52,10 @@ struct PostTemplate<'a> {
     rendered: String,
     rendered_in: RenderStats,
     markdown_access: bool,
-    df: &'a DateFormat,
     js: bool,
     color: Option<&'a str>,
     joined_tags: String,
+    style: &'a StyleConfig,
 }
 
 #[derive(Deserialize)]
@@ -128,12 +126,10 @@ async fn index<'a>(
             description: &config.description,
             posts,
             rss: config.rss.enable,
-            df: &config.date_format,
             js: config.js_enable,
-            color: config.default_color.as_deref(),
-            sort: config.default_sort,
             tags,
             joined_tags,
+            style: &config.style,
         },
     );
     drop(reg);
@@ -228,10 +224,13 @@ async fn post(
                     rendered,
                     rendered_in,
                     markdown_access: config.markdown_access,
-                    df: &config.date_format,
                     js: config.js_enable,
-                    color: meta.color.as_deref().or(config.default_color.as_deref()),
+                    color: meta
+                        .color
+                        .as_deref()
+                        .or(config.style.default_color.as_deref()),
                     joined_tags,
+                    style: &config.style,
                 },
             );
             drop(reg);

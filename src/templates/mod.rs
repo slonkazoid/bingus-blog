@@ -29,7 +29,7 @@ fn is_ext(path: impl AsRef<Path>, ext: &str) -> bool {
     }
 }
 
-pub(self) fn get_template_name<'a>(path: &'a Path) -> Option<&'a str> {
+ fn get_template_name(path: &Path) -> Option<&str> {
     if !is_ext(path, "hbs") {
         return None;
     }
@@ -47,10 +47,10 @@ fn register_included_file(
     Ok(())
 }
 
-fn register_path<'a>(
+fn register_path(
     path: impl AsRef<std::path::Path>,
     name: &str,
-    registry: &mut Handlebars<'a>,
+    registry: &mut Handlebars<'_>,
 ) -> Result<(), TemplateError> {
     let template = compile_path(path)?;
     registry.register_template(name, template);
@@ -85,7 +85,7 @@ fn compile_path(path: impl AsRef<std::path::Path>) -> Result<Template, TemplateE
     Ok(template)
 }
 
-pub(self) async fn compile_path_async_io(
+ async fn compile_path_async_io(
     path: impl AsRef<std::path::Path>,
 ) -> Result<Template, TemplateError> {
     use tokio::fs::OpenOptions;

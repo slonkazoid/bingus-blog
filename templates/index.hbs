@@ -7,7 +7,7 @@
 		<meta property="og:description" content="{{description}}" />
 		<meta name="keywords" content="{{joined_tags}}" />
 		{{#if (ne color null)}}
-			<meta name="theme-color" content="{{color}}" />
+			<meta name="theme-color" content="{{style.color}}" />
 		{{/if}}
 		<title>{{title}}</title>
 		<link rel="stylesheet" href="/static/style.css" />
@@ -30,9 +30,9 @@
 					<form id="sort" style="display: none">
 						sort by: {{sort}}
 						<br />
-						<input type="radio" name="sort" id="sort-date" value="date" {{#if (eq sort "date")}}checked{{/if}} />
+						<input type="radio" name="sort" id="sort-date" value="date" {{#if (eq style.default_sort "date")}}checked{{/if}} />
 						<label for="sort-date">date</label>
-						<input type="radio" name="sort" id="sort-name" value="name" {{#if (eq sort "name")}}checked{{/if}} />
+						<input type="radio" name="sort" id="sort-name" value="name" {{#if (eq style.default_sort "name")}}checked{{/if}} />
 						<label for="sort-name">name</label>
 					</form>
 				{{/if}}
@@ -43,7 +43,7 @@
 							<span class="post-author">- by {{author}}</span>
 							<br />
 							{{description}}<br />
-							{{>post_table post df=@root.df}}
+							{{>post_table post style=@root.style}}
 						</div>
 					</div>
 				{{else}} there are no posts right now. check back later! {{/each}}
