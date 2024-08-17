@@ -1,4 +1,5 @@
-/* colors */
+/* colors from catppuccin https://github.com/catppuccin/catppuccin
+   licensed under the MIT license, available in the source tree    */
 :root {
 	--base: #1e1e2e;
 	--text: #cdd6f4;
