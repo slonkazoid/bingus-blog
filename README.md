@@ -26,6 +26,7 @@ for bingus-blog viewers: [see original document](https://git.slonk.ing/slonk/bin
 - [ ] blog thumbnail and favicon
 - [ ] sort asc/desc
 - [ ] extend syntect options
+- [ ] ^ fix syntect mutex poisoning
 - [ ] better error reporting and error pages
 - [ ] better tracing
 - [ ] replace HashMap with HashCache once i implement [this](https://github.com/wvwwvwwv/scalable-concurrent-containers/issues/139)
