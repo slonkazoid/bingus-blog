@@ -17,7 +17,7 @@ for bingus-blog viewers: [see original document](https://git.slonk.ing/slonk/bin
   can write posts from anywhere and sync it with the server without headache
 - RSS is supported
 - the look of the blog is extremely customizable, with support for
-  [custom drop-ins](/CUSTOM.md) for both templates and static content
+  [custom drop-ins](CUSTOM.md) for both templates and static content
 - really easy to deploy (the server is one executable file)
 - blazingly fast
 
@@ -37,7 +37,7 @@ for bingus-blog viewers: [see original document](https://git.slonk.ing/slonk/bin
 
 ## Configuration
 
-see [CONFIG.md](/CONFIG.md)
+see [CONFIG.md](CONFIG.md)
 
 ## Building
 
@@ -52,7 +52,7 @@ cargo +nightly build --release
 
 the executable will be located at `target/release/bingus-blog`.
 
-see [BUILDING.md](/BUILDING.md) for more information and detailed instructions.
+see [BUILDING.md](BUILDING.md) for more information and detailed instructions.
 
 ## Writing Posts
 
