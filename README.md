@@ -33,6 +33,7 @@ for bingus-blog viewers: [see original document](https://git.slonk.ing/slonk/bin
 - [ ] make date parsing less strict
 - [ ] improve home page
 - [ ] multi-language support
+- [ ] add credits
 - [x] be blazingly fast
 - [x] 100+ MiB binary size
 
