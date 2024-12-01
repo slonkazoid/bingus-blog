@@ -143,7 +143,6 @@ impl Default for DisplayDates {
     }
 }
 
-
 impl Default for DirsConfig {
     fn default() -> Self {
         Self {
@@ -194,7 +193,7 @@ pub async fn load() -> Result<Config> {
         "{}_CONFIG",
         env!("CARGO_BIN_NAME").to_uppercase().replace('-', "_")
     ))
-    .unwrap_or(String::from("config.toml"));
+    .unwrap_or_else(|_| String::from("config.toml"));
     match tokio::fs::OpenOptions::new()
         .read(true)
         .open(&config_file)

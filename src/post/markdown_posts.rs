@@ -203,13 +203,7 @@ where
 
             if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
                 let mtime = as_secs(&stat.modified()?);
-                // TODO. this?
-                let name = path
-                    .clone()
-                    .file_stem()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string();
+                let name = String::from(path.file_stem().unwrap().to_string_lossy());
 
                 if let Some(cache) = self.cache.as_ref()
                     && let Some(hit) = cache.lookup_metadata(&name, mtime).await

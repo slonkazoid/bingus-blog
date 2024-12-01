@@ -5,7 +5,7 @@ use std::time::Duration;
 use axum::extract::{Path, Query, State};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::Request;
-use axum::response::{IntoResponse, Redirect, Response};
+use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use handlebars::Handlebars;
@@ -26,6 +26,19 @@ use crate::serve_dir_included::handle;
 
 const STATIC: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");
 
+#[derive(Serialize)]
+pub struct BingusInfo {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub repository: &'static str,
+}
+
+const BINGUS_INFO: BingusInfo = BingusInfo {
+    name: env!("CARGO_PKG_NAME"),
+    version: env!("CARGO_PKG_VERSION"),
+    repository: env!("CARGO_PKG_REPOSITORY"),
+};
+
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct AppState {
@@ -36,6 +49,7 @@ pub struct AppState {
 
 #[derive(Serialize)]
 struct IndexTemplate<'a> {
+    bingus_info: &'a BingusInfo,
     title: &'a str,
     description: &'a str,
     posts: Vec<PostMetadata>,
@@ -48,6 +62,7 @@ struct IndexTemplate<'a> {
 
 #[derive(Serialize)]
 struct PostTemplate<'a> {
+    bingus_info: &'a BingusInfo,
     meta: &'a PostMetadata,
     rendered: String,
     rendered_in: RenderStats,
@@ -124,6 +139,7 @@ async fn index<'a>(
         &IndexTemplate {
             title: &config.title,
             description: &config.description,
+            bingus_info: &BINGUS_INFO,
             posts,
             rss: config.rss.enable,
             js: config.js_enable,
@@ -133,7 +149,7 @@ async fn index<'a>(
         },
     );
     drop(reg);
-    Ok(([(CONTENT_TYPE, "text/html")], rendered?))
+    Ok(Html(rendered?))
 }
 
 async fn all_posts(
@@ -220,6 +236,7 @@ async fn post(
             let rendered = reg.render(
                 "post",
                 &PostTemplate {
+                    bingus_info: &BINGUS_INFO,
                     meta,
                     rendered,
                     rendered_in,
@@ -234,7 +251,7 @@ async fn post(
                 },
             );
             drop(reg);
-            Ok(([(CONTENT_TYPE, "text/html")], rendered?).into_response())
+            Ok(Html(rendered?).into_response())
         }
         ReturnedPost::Raw(body, content_type) => {
             Ok(([(CONTENT_TYPE, content_type)], body).into_response())

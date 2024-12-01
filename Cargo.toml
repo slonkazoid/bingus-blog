@@ -3,6 +3,7 @@ name = "bingus-blog"
 version = "0.1.0"
 edition = "2021"
 default-run = "bingus-blog"
+repository = "https://git.slonk.ing/slonk/bingus-blog"
 
 [features]
 default = []

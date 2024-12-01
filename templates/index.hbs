@@ -22,8 +22,7 @@
 	</head>
 	<body>
 		<main>
-			<h1>{{title}}</h1>
-			<p>{{description}}</p>
+			{{>title}}
 			<h2>posts</h2>
 			<div>
 				{{#if js}}
@@ -59,5 +58,8 @@
 				<span class="post-author">- {{this}} post{{#if (ne this 1)}}s{{/if}}</span><br />
 			{{/each}}
 		</main>
+		<footer>
+			{{>footer}}
+		</footer>
 	</body>
 </html>

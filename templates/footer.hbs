@@ -1,0 +1,21 @@
+running <a href="{{bingus_info.repository}}" target="_blank">{{bingus_info.name}}</a> v{{bingus_info.version}}
+{{#if rendered_in}}
+<b> - </b>
+{{/if}}
+{{#each rendered_in}}
+	{{#if (eq @key "ParsedAndRendered")}}
+		<span class="tooltipped" title="parsing took {{duration this.1}}">parsed</span>
+		and
+		<span class="tooltipped" title="rendering took {{duration this.2}}">rendered</span>
+		in
+		{{duration this.0}}
+
+	{{else if (eq @key "Cached")}}
+		retrieved from cache in
+		{{duration this}}
+	{{/if}}
+{{/each}}
+{{#if markdown_access}}
+	-
+	<a href="/posts/{{meta.name}}.md">view raw</a>
+{{/if}}

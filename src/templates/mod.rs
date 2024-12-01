@@ -8,7 +8,6 @@ use thiserror::Error;
 use tracing::{debug, error, info_span, trace};
 
 const TEMPLATES: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/templates");
-const PARTIALS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/partials");
 
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -29,7 +28,7 @@ fn is_ext(path: impl AsRef<Path>, ext: &str) -> bool {
     }
 }
 
- fn get_template_name(path: &Path) -> Option<&str> {
+fn get_template_name(path: &Path) -> Option<&str> {
     if !is_ext(path, "hbs") {
         return None;
     }
@@ -57,15 +56,6 @@ fn register_path(
     Ok(())
 }
 
-fn register_partial(
-    file: &include_dir::File<'_>,
-    name: &str,
-    registry: &mut Handlebars,
-) -> Result<(), TemplateError> {
-    registry.register_partial(name, file.contents_utf8().ok_or(TemplateError::UTF8Error)?)?;
-    Ok(())
-}
-
 fn compile_included_file(file: &include_dir::File<'_>) -> Result<Template, TemplateError> {
     let contents = file.contents_utf8().ok_or(TemplateError::UTF8Error)?;
 
@@ -85,7 +75,7 @@ fn compile_path(path: impl AsRef<std::path::Path>) -> Result<Template, TemplateE
     Ok(template)
 }
 
- async fn compile_path_async_io(
+async fn compile_path_async_io(
     path: impl AsRef<std::path::Path>,
 ) -> Result<Template, TemplateError> {
     use tokio::fs::OpenOptions;
@@ -122,29 +112,6 @@ pub fn new_registry<'a>(custom_templates_path: impl AsRef<Path>) -> io::Result<H
         match register_included_file(file, name, &mut reg) {
             Ok(()) => debug!("registered template {name:?}"),
             Err(err) => error!("error while registering template: {err}"),
-        };
-    }
-
-    for entry in PARTIALS.entries() {
-        let file = match entry.as_file() {
-            Some(file) => file,
-            None => continue,
-        };
-
-        let span = info_span!("register_partial", path = ?file.path());
-        let _handle = span.enter();
-
-        let name = match get_template_name(file.path()) {
-            Some(v) => v,
-            None => {
-                trace!("skipping file");
-                continue;
-            }
-        };
-
-        match register_partial(file, name, &mut reg) {
-            Ok(()) => debug!("registered partial {name:?}"),
-            Err(err) => error!("error while registering partial: {err}"),
         };
     }
 
