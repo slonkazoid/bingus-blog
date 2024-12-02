@@ -39,9 +39,6 @@ pub async fn handle(
     req: Request,
     included_dir: &'static Dir<'static>,
 ) -> Result<Response, Infallible> {
-    #[cfg(windows)]
-    compile_error!("this is not safe");
-
     let path = req.uri().path();
 
     let has_dotdot = path.split('/').any(|seg| seg == "..");
