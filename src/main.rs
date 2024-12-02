@@ -3,7 +3,6 @@
 mod app;
 mod config;
 mod error;
-mod hash_arc_store;
 mod helpers;
 mod markdown_render;
 mod platform;
@@ -77,24 +76,18 @@ async fn main() -> eyre::Result<()> {
 
     let reg = Arc::new(RwLock::new(reg));
 
-    let watcher_token = cancellation_token.child_token();
-
-    let posts = Arc::new(MarkdownPosts::new(Arc::clone(&config)).await?);
-    let state = AppState {
-        config: Arc::clone(&config),
-        posts: Arc::clone(&posts),
-        reg: Arc::clone(&reg),
-    };
-
     debug!("setting up watcher");
+    let watcher_token = cancellation_token.child_token();
     tasks.spawn(
         watch_templates(
             config.dirs.custom_templates.clone(),
             watcher_token.clone(),
-            reg,
+            reg.clone(),
         )
         .instrument(info_span!("custom_template_watcher")),
     );
+
+    let posts = Arc::new(MarkdownPosts::new(Arc::clone(&config)).await?);
 
     if config.cache.enable && config.cache.cleanup {
         if let Some(millis) = config.cache.cleanup_interval {
@@ -117,6 +110,11 @@ async fn main() -> eyre::Result<()> {
         }
     }
 
+    let state = AppState {
+        config: Arc::clone(&config),
+        posts: Arc::clone(&posts),
+        reg: Arc::clone(&reg),
+    };
     let app = app::new(&config).with_state(state.clone());
 
     let listener = TcpListener::bind(socket_addr)

@@ -4,6 +4,7 @@ use askama_axum::Template;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use thiserror::Error;
+use tracing::error;
 
 #[derive(Debug)]
 #[repr(transparent)]
@@ -76,17 +77,14 @@ struct ErrorTemplate {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        let error = self.to_string();
+        error!("error while handling request: {error}");
+
         let status_code = match &self {
             AppError::PostError(PostError::NotFound(_)) => StatusCode::NOT_FOUND,
             AppError::RssDisabled => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (
-            status_code,
-            ErrorTemplate {
-                error: self.to_string(),
-            },
-        )
-            .into_response()
+        (status_code, ErrorTemplate { error }).into_response()
     }
 }

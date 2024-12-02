@@ -58,7 +58,7 @@ pub trait PostManager {
         tag: Option<&String>,
     ) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = self
-            .get_all_post_metadata(|metadata| !tag.is_some_and(|tag| !metadata.tags.contains(tag)))
+            .get_all_post_metadata(|metadata| tag.is_none_or(|tag| metadata.tags.contains(tag)))
             .await?;
         // we still want some semblance of order if created_at is None so sort by mtime as well
         posts.sort_unstable_by_key(|metadata| metadata.modified_at.unwrap_or_default());

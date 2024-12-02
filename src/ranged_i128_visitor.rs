@@ -1,5 +1,5 @@
 pub struct RangedI128Visitor<const START: i128, const END: i128>;
-impl<'de, const START: i128, const END: i128> serde::de::Visitor<'de>
+impl<const START: i128, const END: i128> serde::de::Visitor<'_>
     for RangedI128Visitor<START, END>
 {
     type Value = i128;

@@ -173,10 +173,9 @@ async fn rss(
 
     let posts = posts
         .get_all_posts(|metadata, _| {
-            !query
+            query
                 .tag
-                .as_ref()
-                .is_some_and(|tag| !metadata.tags.contains(tag))
+                .as_ref().is_none_or(|tag| metadata.tags.contains(tag))
         })
         .await?;
 

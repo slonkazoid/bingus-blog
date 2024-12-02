@@ -9,6 +9,7 @@ use std::time::SystemTime;
 use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{self, Context};
+use comrak::plugins::syntect::SyntectAdapter;
 use fronma::parser::{parse, ParsedData};
 use serde::Deserialize;
 use tokio::fs;
@@ -16,7 +17,7 @@ use tokio::io::AsyncReadExt;
 use tracing::{error, info, warn};
 
 use crate::config::Config;
-use crate::markdown_render::render;
+use crate::markdown_render::{build_syntect, render};
 use crate::post::cache::{load_cache, Cache, CACHE_VERSION};
 use crate::post::{PostError, PostManager, PostMetadata, RenderStats, ReturnedPost};
 use crate::systemtime_as_secs::as_secs;
@@ -62,6 +63,7 @@ where
 {
     cache: Option<Cache>,
     config: C,
+    syntect: SyntectAdapter,
 }
 
 impl<C> MarkdownPosts<C>
@@ -69,7 +71,10 @@ where
     C: Deref<Target = Config>,
 {
     pub async fn new(config: C) -> eyre::Result<MarkdownPosts<C>> {
-        if config.cache.enable {
+        let syntect =
+            build_syntect(&config.render).context("failed to create syntax highlighting engine")?;
+
+        let cache = if config.cache.enable {
             if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
                 info!("loading cache from file");
                 let mut cache = load_cache(&config).await.unwrap_or_else(|err| {
@@ -83,22 +88,19 @@ where
                     cache = Default::default();
                 };
 
-                Ok(Self {
-                    cache: Some(cache),
-                    config,
-                })
+                Some(cache)
             } else {
-                Ok(Self {
-                    cache: Some(Default::default()),
-                    config,
-                })
+                Some(Default::default())
             }
         } else {
-            Ok(Self {
-                cache: None,
-                config,
-            })
-        }
+            None
+        };
+
+        Ok(Self {
+            cache,
+            config,
+            syntect,
+        })
     }
 
     async fn parse_and_render(
@@ -126,7 +128,7 @@ where
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let post = render(body, &self.config.render);
+        let post = render(body, Some(&self.syntect));
         let rendering = before_render.elapsed();
 
         if let Some(cache) = self.cache.as_ref() {
