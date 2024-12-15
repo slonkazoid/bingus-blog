@@ -1,4 +1,4 @@
-#![feature(let_chains, pattern)]
+#![feature(let_chains, pattern, path_add_extension)]
 
 mod app;
 mod config;
@@ -14,11 +14,13 @@ mod templates;
 
 use std::future::IntoFuture;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::{self, Context};
+use config::Engine;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
@@ -32,7 +34,7 @@ use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
 use crate::app::AppState;
 use crate::post::cache::{load_cache, CacheGuard, CACHE_VERSION};
-use crate::post::{MarkdownPosts, PostManager};
+use crate::post::{Blag, MarkdownPosts, PostManager};
 use crate::templates::new_registry;
 use crate::templates::watcher::watch_templates;
 
@@ -41,13 +43,7 @@ async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     let reg = tracing_subscriber::registry();
     #[cfg(feature = "tokio-console")]
-    let reg = reg
-        .with(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::TRACE.into())
-                .from_env_lossy(),
-        )
-        .with(console_subscriber::spawn());
+    let reg = reg.with(console_subscriber::spawn());
     #[cfg(not(feature = "tokio-console"))]
     let reg = reg.with(
         EnvFilter::builder()
@@ -88,32 +84,39 @@ async fn main() -> eyre::Result<()> {
         .instrument(info_span!("custom_template_watcher")),
     );
 
-    let cache = if config.cache.enable {
-        if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
-            info!("loading cache from file");
-            let mut cache = load_cache(&config.cache).await.unwrap_or_else(|err| {
-                error!("failed to load cache: {}", err);
-                info!("using empty cache");
-                Default::default()
-            });
+    let posts: Arc<dyn PostManager + Send + Sync> = match config.engine {
+        Engine::Markdown => {
+            let cache = if config.cache.enable {
+                if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
+                    info!("loading cache from file");
+                    let mut cache = load_cache(&config.cache).await.unwrap_or_else(|err| {
+                        error!("failed to load cache: {}", err);
+                        info!("using empty cache");
+                        Default::default()
+                    });
 
-            if cache.version() < CACHE_VERSION {
-                warn!("cache version changed, clearing cache");
-                cache = Default::default();
-            };
+                    if cache.version() < CACHE_VERSION {
+                        warn!("cache version changed, clearing cache");
+                        cache = Default::default();
+                    };
 
-            Some(cache)
-        } else {
-            Some(Default::default())
+                    Some(cache)
+                } else {
+                    Some(Default::default())
+                }
+            } else {
+                None
+            }
+            .map(|cache| CacheGuard::new(cache, config.cache.clone()))
+            .map(Arc::new);
+
+            Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?)
         }
-    } else {
-        None
-    }
-    .map(|cache| CacheGuard::new(cache, config.cache.clone()))
-    .map(Arc::new);
-
-    let posts: Arc<dyn PostManager + Send + Sync> =
-        Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?);
+        Engine::Blag => Arc::new(Blag::new(
+            config.dirs.posts.clone().into(),
+            Some(PathBuf::from("blag").into()),
+        )),
+    };
 
     if config.cache.enable && config.cache.cleanup {
         if let Some(millis) = config.cache.cleanup_interval {

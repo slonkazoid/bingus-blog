@@ -66,11 +66,11 @@ struct PostTemplate<'a> {
     meta: &'a PostMetadata,
     rendered: String,
     rendered_in: RenderStats,
-    markdown_access: bool,
     js: bool,
     color: Option<&'a str>,
     joined_tags: String,
     style: &'a StyleConfig,
+    raw_name: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -240,6 +240,7 @@ async fn post(
             let joined_tags = meta.tags.join(", ");
 
             let reg = reg.read().await;
+            let raw_name;
             let rendered = reg.render(
                 "post",
                 &PostTemplate {
@@ -247,7 +248,6 @@ async fn post(
                     meta,
                     rendered,
                     rendered_in,
-                    markdown_access: config.markdown_access,
                     js: config.js_enable,
                     color: meta
                         .color
@@ -255,6 +255,12 @@ async fn post(
                         .or(config.style.default_color.as_deref()),
                     joined_tags,
                     style: &config.style,
+                    raw_name: if config.markdown_access {
+                        raw_name = posts.get_raw(&meta.name).await?;
+                        raw_name.as_deref()
+                    } else {
+                        None
+                    },
                 },
             );
             drop(reg);

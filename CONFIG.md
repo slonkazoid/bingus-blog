@@ -5,10 +5,13 @@ the configuration format, with defaults, is documented below:
 ```toml
 title = "bingus-blog"  # title of the blog
 # description of the blog
-description = "blazingly fast markdown blog software written in rust memory safe"
-markdown_access = true # allow users to see the raw markdown of a post
-                       # endpoint: /posts/<name>.md
+description = "blazingly fast blog software written in rust memory safe"
+raw_access = true      # allow users to see the raw source of a post
 js_enable = true       # enable javascript (required for sorting and dates)
+engine = "markdown"    # choose which post engine to use
+                       # options: "markdown", "blag"
+                       # absolutely do not use "blag" unless you know exactly
+                       # what you are getting yourself into.
 
 [style]
 date_format = "RFC3339" # format string used to format dates in the backend
@@ -52,6 +55,9 @@ compression_level = 3  # zstd compression level, 3 is recommended
 syntect.load_defaults = false      # include default syntect themes
 syntect.themes_dir = "themes"      # directory to include themes from
 syntect.theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)
+
+[blag]
+bin = "blag"           # path to blag binary
 ```
 
 configuration is done in [TOML](https://toml.io/)  

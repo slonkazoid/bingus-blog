@@ -93,6 +93,20 @@ pub struct DisplayDates {
     pub modification: bool,
 }
 
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum Engine {
+    #[default]
+    Markdown,
+    Blag,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct BlagConfig {
+    pub bin: PathBuf,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
@@ -100,12 +114,14 @@ pub struct Config {
     pub description: String,
     pub markdown_access: bool,
     pub js_enable: bool,
+    pub engine: Engine,
     pub style: StyleConfig,
     pub rss: RssConfig,
     pub dirs: DirsConfig,
     pub http: HttpConfig,
     pub render: RenderConfig,
     pub cache: CacheConfig,
+    pub blag: BlagConfig,
 }
 
 impl Default for Config {
@@ -115,6 +131,7 @@ impl Default for Config {
             description: "blazingly fast markdown blog software written in rust memory safe".into(),
             markdown_access: true,
             js_enable: true,
+            engine: Default::default(),
             style: Default::default(),
             // i have a love-hate relationship with serde
             // it was engimatic at first, but then i started actually using it
@@ -130,6 +147,7 @@ impl Default for Config {
             http: Default::default(),
             render: Default::default(),
             cache: Default::default(),
+            blag: Default::default(),
         }
     }
 }
@@ -184,6 +202,12 @@ impl Default for CacheConfig {
             compress: true,
             compression_level: 3,
         }
+    }
+}
+
+impl Default for BlagConfig {
+    fn default() -> Self {
+        Self { bin: "blag".into() }
     }
 }
 

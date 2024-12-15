@@ -1,44 +1,42 @@
-use std::fmt::Display;
-
 use askama_axum::Template;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use thiserror::Error;
 use tracing::error;
 
-#[derive(Debug)]
-#[repr(transparent)]
-pub struct FronmaError(fronma::error::Error);
-
-impl std::error::Error for FronmaError {}
-
-impl Display for FronmaError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("failed to parse front matter: ")?;
-        match &self.0 {
-            fronma::error::Error::MissingBeginningLine => f.write_str("missing beginning line"),
-            fronma::error::Error::MissingEndingLine => f.write_str("missing ending line"),
-            fronma::error::Error::SerdeYaml(yaml_error) => write!(f, "{}", yaml_error),
-        }
-    }
-}
-
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum PostError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-    #[error(transparent)]
-    AskamaError(#[from] askama::Error),
-    #[error(transparent)]
-    ParseError(#[from] FronmaError),
+    #[error("{0}")]
+    ParseError(String),
+    #[error("{0}")]
+    RenderError(String),
     #[error("post {0:?} not found")]
     NotFound(String),
 }
 
 impl From<fronma::error::Error> for PostError {
     fn from(value: fronma::error::Error) -> Self {
-        Self::ParseError(FronmaError(value))
+        let binding;
+        Self::ParseError(format!(
+            "failed to parse front matter: {}",
+            match value {
+                fronma::error::Error::MissingBeginningLine => "missing beginning line",
+                fronma::error::Error::MissingEndingLine => "missing ending line",
+                fronma::error::Error::SerdeYaml(yaml_error) => {
+                    binding = yaml_error.to_string();
+                    &binding
+                }
+            }
+        ))
+    }
+}
+
+impl From<serde_json::Error> for PostError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::ParseError(value.to_string())
     }
 }
 

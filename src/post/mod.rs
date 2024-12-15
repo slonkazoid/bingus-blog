@@ -1,3 +1,4 @@
+pub mod blag;
 pub mod cache;
 pub mod markdown_posts;
 
@@ -8,8 +9,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::error::PostError;
-pub use crate::post::markdown_posts::MarkdownPosts;
+pub use blag::Blag;
+pub use markdown_posts::MarkdownPosts;
 
+// TODO: replace String with Arc<str>
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostMetadata {
     pub name: String,
@@ -24,7 +27,7 @@ pub struct PostMetadata {
     pub tags: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub enum RenderStats {
     Cached(Duration),
     // format: Total, Parsed in, Rendered in
@@ -41,7 +44,7 @@ pub enum Filter<'a> {
     Tags(&'a [&'a str]),
 }
 
-impl<'a> Filter<'a> {
+impl Filter<'_> {
     pub fn apply(&self, meta: &PostMetadata) -> bool {
         match self {
             Filter::Tags(tags) => tags
@@ -110,5 +113,10 @@ pub trait PostManager {
 
     async fn get_post(&self, name: &str) -> Result<ReturnedPost, PostError>;
 
-    async fn cleanup(&self);
+    async fn cleanup(&self) {}
+
+    #[allow(unused)]
+    async fn get_raw(&self, name: &str) -> Result<Option<String>, PostError> {
+        Ok(None)
+    }
 }

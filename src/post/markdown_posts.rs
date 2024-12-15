@@ -286,4 +286,12 @@ impl PostManager for MarkdownPosts {
                 .await
         }
     }
+
+    async fn get_raw(&self, name: &str) -> Result<Option<String>, PostError> {
+        let mut buf = String::with_capacity(name.len() + 3);
+        buf += name;
+        buf += ".md";
+
+        Ok(Some(buf))
+    }
 }
