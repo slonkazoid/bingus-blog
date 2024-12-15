@@ -75,7 +75,7 @@ async fn main() -> eyre::Result<()> {
     reg.register_helper("duration", Box::new(helpers::duration));
     debug!(duration = ?start.elapsed(), "registered all templates");
 
-    let reg = Arc::new(RwLock::new(reg));
+    let registry = Arc::new(RwLock::new(reg));
 
     debug!("setting up watcher");
     let watcher_token = cancellation_token.child_token();
@@ -83,7 +83,7 @@ async fn main() -> eyre::Result<()> {
         watch_templates(
             config.dirs.custom_templates.clone(),
             watcher_token.clone(),
-            reg.clone(),
+            registry.clone(),
         )
         .instrument(info_span!("custom_template_watcher")),
     );
@@ -112,7 +112,8 @@ async fn main() -> eyre::Result<()> {
     .map(|cache| CacheGuard::new(cache, config.cache.clone()))
     .map(Arc::new);
 
-    let posts = Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?);
+    let posts: Arc<dyn PostManager + Send + Sync> =
+        Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?);
 
     if config.cache.enable && config.cache.cleanup {
         if let Some(millis) = config.cache.cleanup_interval {
@@ -137,8 +138,8 @@ async fn main() -> eyre::Result<()> {
 
     let state = AppState {
         config: Arc::clone(&config),
-        posts: posts as Arc<dyn PostManager + Send + Sync>,
-        templates: Arc::clone(&reg),
+        posts,
+        templates: registry,
     };
     let app = app::new(&config).with_state(state.clone());
 
