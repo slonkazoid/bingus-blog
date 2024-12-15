@@ -31,6 +31,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
 use crate::app::AppState;
+use crate::post::cache::{load_cache, CacheGuard, CACHE_VERSION};
 use crate::post::{MarkdownPosts, PostManager};
 use crate::templates::new_registry;
 use crate::templates::watcher::watch_templates;
@@ -87,7 +88,31 @@ async fn main() -> eyre::Result<()> {
         .instrument(info_span!("custom_template_watcher")),
     );
 
-    let posts = Arc::new(MarkdownPosts::new(Arc::clone(&config)).await?);
+    let cache = if config.cache.enable {
+        if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
+            info!("loading cache from file");
+            let mut cache = load_cache(&config.cache).await.unwrap_or_else(|err| {
+                error!("failed to load cache: {}", err);
+                info!("using empty cache");
+                Default::default()
+            });
+
+            if cache.version() < CACHE_VERSION {
+                warn!("cache version changed, clearing cache");
+                cache = Default::default();
+            };
+
+            Some(cache)
+        } else {
+            Some(Default::default())
+        }
+    } else {
+        None
+    }
+    .map(|cache| CacheGuard::new(cache, config.cache.clone()))
+    .map(Arc::new);
+
+    let posts = Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?);
 
     if config.cache.enable && config.cache.cleanup {
         if let Some(millis) = config.cache.cleanup_interval {
@@ -112,8 +137,8 @@ async fn main() -> eyre::Result<()> {
 
     let state = AppState {
         config: Arc::clone(&config),
-        posts: Arc::clone(&posts),
-        reg: Arc::clone(&reg),
+        posts: posts as Arc<dyn PostManager + Send + Sync>,
+        templates: Arc::clone(&reg),
     };
     let app = app::new(&config).with_state(state.clone());
 

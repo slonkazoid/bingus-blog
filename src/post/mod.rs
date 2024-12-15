@@ -3,7 +3,7 @@ pub mod markdown_posts;
 
 use std::time::Duration;
 
-use axum::http::HeaderValue;
+use axum::{async_trait, http::HeaderValue};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -37,29 +37,58 @@ pub enum ReturnedPost {
     Raw(Vec<u8>, HeaderValue),
 }
 
+pub enum Filter<'a> {
+    Tags(&'a [&'a str]),
+}
+
+impl<'a> Filter<'a> {
+    pub fn apply(&self, meta: &PostMetadata) -> bool {
+        match self {
+            Filter::Tags(tags) => tags
+                .iter()
+                .any(|tag| meta.tags.iter().any(|meta_tag| meta_tag == tag)),
+        }
+    }
+}
+
+pub trait ApplyFilters {
+    fn apply_filters(&self, filters: &[Filter<'_>]) -> bool;
+}
+
+impl ApplyFilters for PostMetadata {
+    fn apply_filters(&self, filters: &[Filter<'_>]) -> bool {
+        for filter in filters {
+            if !filter.apply(self) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[async_trait]
 pub trait PostManager {
     async fn get_all_post_metadata(
         &self,
-        filter: impl Fn(&PostMetadata) -> bool,
+        filters: &[Filter<'_>],
     ) -> Result<Vec<PostMetadata>, PostError> {
-        self.get_all_posts(|m, _| filter(m))
+        self.get_all_posts(filters)
             .await
             .map(|vec| vec.into_iter().map(|(meta, ..)| meta).collect())
     }
 
     async fn get_all_posts(
         &self,
-        filter: impl Fn(&PostMetadata, &str) -> bool,
+        filters: &[Filter<'_>],
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError>;
 
     async fn get_max_n_post_metadata_with_optional_tag_sorted(
         &self,
         n: Option<usize>,
-        tag: Option<&String>,
+        tag: Option<&str>,
     ) -> Result<Vec<PostMetadata>, PostError> {
-        let mut posts = self
-            .get_all_post_metadata(|metadata| tag.is_none_or(|tag| metadata.tags.contains(tag)))
-            .await?;
+        let filters = tag.and(Some(Filter::Tags(tag.as_slice())));
+        let mut posts = self.get_all_post_metadata(filters.as_slice()).await?;
         // we still want some semblance of order if created_at is None so sort by mtime as well
         posts.sort_unstable_by_key(|metadata| metadata.modified_at.unwrap_or_default());
         posts.sort_by_key(|metadata| metadata.created_at.unwrap_or_default());

@@ -21,7 +21,7 @@ use tracing::{info, info_span, Span};
 
 use crate::config::{Config, StyleConfig};
 use crate::error::{AppError, AppResult};
-use crate::post::{MarkdownPosts, PostManager, PostMetadata, RenderStats, ReturnedPost};
+use crate::post::{Filter, PostManager, PostMetadata, RenderStats, ReturnedPost};
 use crate::serve_dir_included::handle;
 
 const STATIC: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");
@@ -43,8 +43,8 @@ const BINGUS_INFO: BingusInfo = BingusInfo {
 #[non_exhaustive]
 pub struct AppState {
     pub config: Arc<Config>,
-    pub posts: Arc<MarkdownPosts<Arc<Config>>>,
-    pub reg: Arc<RwLock<Handlebars<'static>>>,
+    pub posts: Arc<dyn PostManager + Send + Sync>,
+    pub templates: Arc<RwLock<Handlebars<'static>>>,
 }
 
 #[derive(Serialize)]
@@ -120,14 +120,17 @@ fn join_tags_for_meta(tags: &Map<String, serde_json::Value>, delim: &str) -> Str
     s
 }
 
-async fn index<'a>(
+async fn index(
     State(AppState {
-        config, posts, reg, ..
+        config,
+        posts,
+        templates: reg,
+        ..
     }): State<AppState>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<impl IntoResponse> {
     let posts = posts
-        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_deref())
         .await?;
 
     let tags = collect_tags(&posts);
@@ -157,7 +160,7 @@ async fn all_posts(
     Query(query): Query<QueryParams>,
 ) -> AppResult<Json<Vec<PostMetadata>>> {
     let posts = posts
-        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_ref())
+        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_deref())
         .await?;
 
     Ok(Json(posts))
@@ -172,11 +175,13 @@ async fn rss(
     }
 
     let posts = posts
-        .get_all_posts(|metadata, _| {
+        .get_all_posts(
             query
                 .tag
-                .as_ref().is_none_or(|tag| metadata.tags.contains(tag))
-        })
+                .as_ref()
+                .and(Some(Filter::Tags(query.tag.as_deref().as_slice())))
+                .as_slice(),
+        )
         .await?;
 
     let mut channel = ChannelBuilder::default();
@@ -223,7 +228,10 @@ async fn rss(
 
 async fn post(
     State(AppState {
-        config, posts, reg, ..
+        config,
+        posts,
+        templates: reg,
+        ..
     }): State<AppState>,
     Path(name): Path<String>,
 ) -> AppResult<impl IntoResponse> {

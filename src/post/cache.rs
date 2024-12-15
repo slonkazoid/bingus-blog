@@ -1,13 +1,13 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::Read;
+use std::io::{Read, Write};
+use std::ops::Deref;
 
-use crate::config::{Config, RenderConfig};
+use crate::config::CacheConfig;
 use crate::post::PostMetadata;
 use color_eyre::eyre::{self, Context};
 use scc::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 /// do not persist cache if this version number changed
 pub const CACHE_VERSION: u16 = 2;
@@ -17,34 +17,24 @@ pub struct CacheValue {
     pub metadata: PostMetadata,
     pub rendered: String,
     pub mtime: u64,
-    config_hash: u64,
+    extra: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Cache(HashMap<String, CacheValue>, u16);
+pub struct FileCache(HashMap<String, CacheValue>, u16);
 
-impl Default for Cache {
+impl Default for FileCache {
     fn default() -> Self {
         Self(Default::default(), CACHE_VERSION)
     }
 }
 
-impl Cache {
-    pub async fn lookup(
-        &self,
-        name: &str,
-        mtime: u64,
-        config: &RenderConfig,
-    ) -> Option<CacheValue> {
+impl FileCache {
+    pub async fn lookup(&self, name: &str, mtime: u64, extra: u64) -> Option<CacheValue> {
         match self.0.get_async(name).await {
             Some(entry) => {
                 let cached = entry.get();
-                if mtime <= cached.mtime && {
-                    let mut hasher = DefaultHasher::new();
-                    config.hash(&mut hasher);
-                    hasher.finish()
-                } == cached.config_hash
-                {
+                if extra == cached.extra && mtime <= cached.mtime {
                     Some(cached.clone())
                 } else {
                     let _ = entry.remove();
@@ -76,17 +66,13 @@ impl Cache {
         metadata: PostMetadata,
         mtime: u64,
         rendered: String,
-        config: &RenderConfig,
+        extra: u64,
     ) -> Result<(), (String, (PostMetadata, String))> {
-        let mut hasher = DefaultHasher::new();
-        config.hash(&mut hasher);
-        let hash = hasher.finish();
-
         let value = CacheValue {
             metadata,
             rendered,
             mtime,
-            config_hash: hash,
+            extra,
         };
 
         if self
@@ -136,12 +122,67 @@ impl Cache {
     }
 }
 
-pub(crate) async fn load_cache(config: &Config) -> Result<Cache, eyre::Report> {
-    let path = &config.cache.file;
+pub struct CacheGuard {
+    inner: FileCache,
+    config: CacheConfig,
+}
+
+impl CacheGuard {
+    pub fn new(cache: FileCache, config: CacheConfig) -> Self {
+        Self {
+            inner: cache,
+            config,
+        }
+    }
+
+    fn try_drop(&mut self) -> Result<(), eyre::Report> {
+        // write cache to file
+        let path = &self.config.file;
+        let serialized = bitcode::serialize(&self.inner).context("failed to serialize cache")?;
+        let mut cache_file = std::fs::File::create(path)
+            .with_context(|| format!("failed to open cache at {}", path.display()))?;
+        let compression_level = self.config.compression_level;
+        if self.config.compress {
+            std::io::Write::write_all(
+                &mut zstd::stream::write::Encoder::new(cache_file, compression_level)?
+                    .auto_finish(),
+                &serialized,
+            )
+        } else {
+            cache_file.write_all(&serialized)
+        }
+        .context("failed to write cache to file")?;
+        info!("wrote cache to {}", path.display());
+        Ok(())
+    }
+}
+
+impl Deref for CacheGuard {
+    type Target = FileCache;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl AsRef<FileCache> for CacheGuard {
+    fn as_ref(&self) -> &FileCache {
+        &self.inner
+    }
+}
+
+impl Drop for CacheGuard {
+    fn drop(&mut self) {
+        self.try_drop().expect("cache to save successfully")
+    }
+}
+
+pub(crate) async fn load_cache(config: &CacheConfig) -> Result<FileCache, eyre::Report> {
+    let path = &config.file;
     let mut cache_file = tokio::fs::File::open(&path)
         .await
         .context("failed to open cache file")?;
-    let serialized = if config.cache.compress {
+    let serialized = if config.compress {
         let cache_file = cache_file.into_std().await;
         tokio::task::spawn_blocking(move || {
             let mut buf = Vec::with_capacity(4096);
