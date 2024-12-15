@@ -14,7 +14,6 @@ mod templates;
 
 use std::future::IntoFuture;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
@@ -114,7 +113,7 @@ async fn main() -> eyre::Result<()> {
         }
         Engine::Blag => Arc::new(Blag::new(
             config.dirs.posts.clone().into(),
-            Some(PathBuf::from("blag").into()),
+            config.blag.bin.clone().into(),
         )),
     };
 

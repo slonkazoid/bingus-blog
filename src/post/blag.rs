@@ -1,8 +1,5 @@
-use std::future::Future;
-use std::mem;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
-use std::process::{ExitStatus, Stdio};
+use std::path::Path;
+use std::process::Stdio;
 use std::sync::Arc;
 
 use axum::async_trait;
@@ -25,11 +22,8 @@ pub struct Blag {
 }
 
 impl Blag {
-    pub fn new(root: Arc<Path>, blag_bin: Option<Arc<Path>>) -> Blag {
-        Self {
-            root,
-            blag_bin: blag_bin.unwrap_or_else(|| PathBuf::from("blag").into()),
-        }
+    pub fn new(root: Arc<Path>, blag_bin: Arc<Path>) -> Blag {
+        Self { root, blag_bin }
     }
 }
 
@@ -43,10 +37,24 @@ impl PostManager for Blag {
         let mut meow = Vec::new();
         let mut files = tokio::fs::read_dir(&self.root).await?;
 
-        while let Ok(Some(entry)) = files.next_entry().await {
+        loop {
+            let entry = match files.next_entry().await {
+                Ok(Some(v)) => v,
+                Ok(None) => break,
+                Err(err) => {
+                    error!("error while getting next entry: {err}");
+                    continue;
+                }
+            };
+
             let file_type = entry.file_type().await?;
             if file_type.is_file() {
-                let name = entry.file_name().into_string().unwrap();
+                let name = match entry.file_name().into_string() {
+                    Ok(v) => v,
+                    Err(_) => {
+                        continue;
+                    }
+                };
 
                 if name.ends_with(".sh") {
                     set.push(async move { self.get_post(name.trim_end_matches(".sh")).await });
@@ -115,7 +123,11 @@ impl PostManager for Blag {
         let mut cmd = tokio::process::Command::new(&*self.blag_bin)
             .arg(path)
             .stdout(Stdio::piped())
-            .spawn()?;
+            .spawn()
+            .map_err(|err| {
+                error!("failed to spawn {:?}: {err}", self.blag_bin);
+                err
+            })?;
 
         let stdout = cmd.stdout.take().unwrap();
 
@@ -125,43 +137,16 @@ impl PostManager for Blag {
 
         let mut meta: PostMetadata = serde_json::from_str(&buf)?;
         meta.name = name.to_string();
-
-        enum Return {
-            Read(String),
-            Exit(ExitStatus),
-        }
-
-        let mut futures: FuturesUnordered<
-            Pin<Box<dyn Future<Output = Result<Return, std::io::Error>> + Send>>,
-        > = FuturesUnordered::new();
-
         buf.clear();
-        let mut fut_buf = mem::take(&mut buf);
+        reader.read_to_string(&mut buf).await?;
 
-        futures.push(Box::pin(async move {
-            reader
-                .read_to_string(&mut fut_buf)
-                .await
-                .map(|_| Return::Read(fut_buf))
-        }));
-        futures.push(Box::pin(async move { cmd.wait().await.map(Return::Exit) }));
+        debug!("read output: {} bytes", buf.len());
 
-        while let Some(res) = futures.next().await {
-            match res? {
-                Return::Read(fut_buf) => {
-                    buf = fut_buf;
-                    debug!("read output: {} bytes", buf.len());
-                }
-                Return::Exit(exit_status) => {
-                    debug!("exited: {exit_status}");
-                    if !exit_status.success() {
-                        return Err(PostError::RenderError(exit_status.to_string()));
-                    }
-                }
-            }
+        let exit_status = cmd.wait().await?;
+        debug!("exited: {exit_status}");
+        if !exit_status.success() {
+            return Err(PostError::RenderError(exit_status.to_string()));
         }
-
-        drop(futures);
 
         let elapsed = start.elapsed();
 

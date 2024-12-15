@@ -7,11 +7,11 @@ use tracing::error;
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum PostError {
-    #[error(transparent)]
+    #[error("io error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("{0}")]
+    #[error("failed to parse post metadata: {0}")]
     ParseError(String),
-    #[error("{0}")]
+    #[error("failed to render post: {0}")]
     RenderError(String),
     #[error("post {0:?} not found")]
     NotFound(String),
