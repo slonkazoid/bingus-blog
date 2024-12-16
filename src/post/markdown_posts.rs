@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io;
 use std::path::Path;
@@ -14,6 +14,7 @@ use color_eyre::eyre::{self, Context};
 use comrak::plugins::syntect::SyntectAdapter;
 use fronma::parser::{parse, ParsedData};
 use serde::Deserialize;
+use serde_value::Value;
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tracing::warn;
@@ -140,6 +141,7 @@ impl PostManager for MarkdownPosts {
     async fn get_all_posts(
         &self,
         filters: &[Filter<'_>],
+        query: &HashMap<String, Value>,
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
         let mut posts = Vec::new();
 
@@ -156,7 +158,7 @@ impl PostManager for MarkdownPosts {
                     .to_string_lossy()
                     .to_string();
 
-                let post = self.get_post(&name).await?;
+                let post = self.get_post(&name, query).await?;
                 if let ReturnedPost::Rendered(meta, content, stats) = post
                     && meta.apply_filters(filters)
                 {
@@ -171,6 +173,7 @@ impl PostManager for MarkdownPosts {
     async fn get_all_post_metadata(
         &self,
         filters: &[Filter<'_>],
+        _query: &HashMap<String, Value>,
     ) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = Vec::new();
 
@@ -211,7 +214,11 @@ impl PostManager for MarkdownPosts {
         Ok(posts)
     }
 
-    async fn get_post(&self, name: &str) -> Result<ReturnedPost, PostError> {
+    async fn get_post(
+        &self,
+        name: &str,
+        _query: &HashMap<String, Value>,
+    ) -> Result<ReturnedPost, PostError> {
         if self.config.markdown_access && name.ends_with(".md") {
             let path = self.config.dirs.posts.join(name);
 
@@ -287,7 +294,7 @@ impl PostManager for MarkdownPosts {
         }
     }
 
-    async fn get_raw(&self, name: &str) -> Result<Option<String>, PostError> {
+    async fn as_raw(&self, name: &str) -> Result<Option<String>, PostError> {
         let mut buf = String::with_capacity(name.len() + 3);
         buf += name;
         buf += ".md";

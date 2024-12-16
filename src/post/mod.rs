@@ -2,11 +2,12 @@ pub mod blag;
 pub mod cache;
 pub mod markdown_posts;
 
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use axum::{async_trait, http::HeaderValue};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_value::Value;
 
 use crate::error::PostError;
 pub use blag::Blag;
@@ -74,8 +75,9 @@ pub trait PostManager {
     async fn get_all_post_metadata(
         &self,
         filters: &[Filter<'_>],
+        query: &HashMap<String, Value>,
     ) -> Result<Vec<PostMetadata>, PostError> {
-        self.get_all_posts(filters)
+        self.get_all_posts(filters, query)
             .await
             .map(|vec| vec.into_iter().map(|(meta, ..)| meta).collect())
     }
@@ -83,15 +85,19 @@ pub trait PostManager {
     async fn get_all_posts(
         &self,
         filters: &[Filter<'_>],
+        query: &HashMap<String, Value>,
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError>;
 
     async fn get_max_n_post_metadata_with_optional_tag_sorted(
         &self,
         n: Option<usize>,
         tag: Option<&str>,
+        query: &HashMap<String, Value>,
     ) -> Result<Vec<PostMetadata>, PostError> {
         let filters = tag.and(Some(Filter::Tags(tag.as_slice())));
-        let mut posts = self.get_all_post_metadata(filters.as_slice()).await?;
+        let mut posts = self
+            .get_all_post_metadata(filters.as_slice(), query)
+            .await?;
         // we still want some semblance of order if created_at is None so sort by mtime as well
         posts.sort_unstable_by_key(|metadata| metadata.modified_at.unwrap_or_default());
         posts.sort_by_key(|metadata| metadata.created_at.unwrap_or_default());
@@ -104,19 +110,27 @@ pub trait PostManager {
     }
 
     #[allow(unused)]
-    async fn get_post_metadata(&self, name: &str) -> Result<PostMetadata, PostError> {
-        match self.get_post(name).await? {
+    async fn get_post_metadata(
+        &self,
+        name: &str,
+        query: &HashMap<String, Value>,
+    ) -> Result<PostMetadata, PostError> {
+        match self.get_post(name, query).await? {
             ReturnedPost::Rendered(metadata, ..) => Ok(metadata),
             ReturnedPost::Raw(..) => Err(PostError::NotFound(name.to_string())),
         }
     }
 
-    async fn get_post(&self, name: &str) -> Result<ReturnedPost, PostError>;
+    async fn get_post(
+        &self,
+        name: &str,
+        query: &HashMap<String, Value>,
+    ) -> Result<ReturnedPost, PostError>;
 
     async fn cleanup(&self) {}
 
     #[allow(unused)]
-    async fn get_raw(&self, name: &str) -> Result<Option<String>, PostError> {
+    async fn as_raw(&self, name: &str) -> Result<Option<String>, PostError> {
         Ok(None)
     }
 }

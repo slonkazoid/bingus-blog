@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -6,6 +7,7 @@ use axum::async_trait;
 use axum::http::HeaderValue;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use serde_value::Value;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::time::Instant;
@@ -32,6 +34,7 @@ impl PostManager for Blag {
     async fn get_all_posts(
         &self,
         filters: &[Filter<'_>],
+        query: &HashMap<String, Value>,
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
         let mut set = FuturesUnordered::new();
         let mut meow = Vec::new();
@@ -57,7 +60,9 @@ impl PostManager for Blag {
                 };
 
                 if name.ends_with(".sh") {
-                    set.push(async move { self.get_post(name.trim_end_matches(".sh")).await });
+                    set.push(
+                        async move { self.get_post(name.trim_end_matches(".sh"), query).await },
+                    );
                 }
             }
         }
@@ -84,7 +89,11 @@ impl PostManager for Blag {
         Ok(meow)
     }
 
-    async fn get_post(&self, name: &str) -> Result<ReturnedPost, PostError> {
+    async fn get_post(
+        &self,
+        name: &str,
+        _query: &HashMap<String, Value>,
+    ) -> Result<ReturnedPost, PostError> {
         let mut path = self.root.join(name);
 
         if name.ends_with(".sh") {
@@ -157,7 +166,7 @@ impl PostManager for Blag {
         ))
     }
 
-    async fn get_raw(&self, name: &str) -> Result<Option<String>, PostError> {
+    async fn as_raw(&self, name: &str) -> Result<Option<String>, PostError> {
         let mut buf = String::with_capacity(name.len() + 3);
         buf += name;
         buf += ".sh";

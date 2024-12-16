@@ -13,6 +13,7 @@ use include_dir::{include_dir, Dir};
 use rss::{Category, ChannelBuilder, ItemBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
+use serde_value::Value;
 use tokio::sync::RwLock;
 use tower::service_fn;
 use tower_http::services::ServeDir;
@@ -78,6 +79,8 @@ struct QueryParams {
     tag: Option<String>,
     #[serde(rename = "n")]
     num_posts: Option<usize>,
+    #[serde(flatten)]
+    other: HashMap<String, Value>,
 }
 
 fn collect_tags(posts: &Vec<PostMetadata>) -> Map<String, serde_json::Value> {
@@ -130,7 +133,11 @@ async fn index(
     Query(query): Query<QueryParams>,
 ) -> AppResult<impl IntoResponse> {
     let posts = posts
-        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_deref())
+        .get_max_n_post_metadata_with_optional_tag_sorted(
+            query.num_posts,
+            query.tag.as_deref(),
+            &query.other,
+        )
         .await?;
 
     let tags = collect_tags(&posts);
@@ -160,7 +167,11 @@ async fn all_posts(
     Query(query): Query<QueryParams>,
 ) -> AppResult<Json<Vec<PostMetadata>>> {
     let posts = posts
-        .get_max_n_post_metadata_with_optional_tag_sorted(query.num_posts, query.tag.as_deref())
+        .get_max_n_post_metadata_with_optional_tag_sorted(
+            query.num_posts,
+            query.tag.as_deref(),
+            &query.other,
+        )
         .await?;
 
     Ok(Json(posts))
@@ -181,6 +192,7 @@ async fn rss(
                 .as_ref()
                 .and(Some(Filter::Tags(query.tag.as_deref().as_slice())))
                 .as_slice(),
+            &query.other,
         )
         .await?;
 
@@ -234,8 +246,9 @@ async fn post(
         ..
     }): State<AppState>,
     Path(name): Path<String>,
+    Query(query): Query<QueryParams>,
 ) -> AppResult<impl IntoResponse> {
-    match posts.get_post(&name).await? {
+    match posts.get_post(&name, &query.other).await? {
         ReturnedPost::Rendered(ref meta, rendered, rendered_in) => {
             let joined_tags = meta.tags.join(", ");
 
@@ -256,7 +269,7 @@ async fn post(
                     joined_tags,
                     style: &config.style,
                     raw_name: if config.markdown_access {
-                        raw_name = posts.get_raw(&meta.name).await?;
+                        raw_name = posts.as_raw(&meta.name).await?;
                         raw_name.as_deref()
                     } else {
                         None
