@@ -83,37 +83,36 @@ async fn main() -> eyre::Result<()> {
         .instrument(info_span!("custom_template_watcher")),
     );
 
-    let posts: Arc<dyn PostManager + Send + Sync> = match config.engine {
-        Engine::Markdown => {
-            let cache = if config.cache.enable {
-                if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
-                    info!("loading cache from file");
-                    let mut cache = load_cache(&config.cache).await.unwrap_or_else(|err| {
-                        error!("failed to load cache: {}", err);
-                        info!("using empty cache");
-                        Default::default()
-                    });
+    let cache = if config.cache.enable {
+        if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
+            info!("loading cache from file");
+            let mut cache = load_cache(&config.cache).await.unwrap_or_else(|err| {
+                error!("failed to load cache: {}", err);
+                info!("using empty cache");
+                Default::default()
+            });
 
-                    if cache.version() < CACHE_VERSION {
-                        warn!("cache version changed, clearing cache");
-                        cache = Default::default();
-                    };
+            if cache.version() < CACHE_VERSION {
+                warn!("cache version changed, clearing cache");
+                cache = Default::default();
+            };
 
-                    Some(cache)
-                } else {
-                    Some(Default::default())
-                }
-            } else {
-                None
-            }
-            .map(|cache| CacheGuard::new(cache, config.cache.clone()))
-            .map(Arc::new);
-
-            Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?)
+            Some(cache)
+        } else {
+            Some(Default::default())
         }
+    } else {
+        None
+    }
+    .map(|cache| CacheGuard::new(cache, config.cache.clone()))
+    .map(Arc::new);
+
+    let posts: Arc<dyn PostManager + Send + Sync> = match config.engine {
+        Engine::Markdown => Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?),
         Engine::Blag => Arc::new(Blag::new(
             config.dirs.posts.clone().into(),
             config.blag.bin.clone().into(),
+            cache.clone(),
         )),
     };
 

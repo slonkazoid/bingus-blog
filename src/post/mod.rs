@@ -29,10 +29,16 @@ pub struct PostMetadata {
 }
 
 #[derive(Serialize, Debug)]
+#[allow(unused)]
 pub enum RenderStats {
     Cached(Duration),
-    // format: Total, Parsed in, Rendered in
-    ParsedAndRendered(Duration, Duration, Duration),
+    Rendered {
+        total: Duration,
+        parsed: Duration,
+        rendered: Duration,
+    },
+    Fetched(Duration),
+    Unknown,
 }
 
 #[allow(clippy::large_enum_variant)] // Raw will be returned very rarely

@@ -1,17 +1,21 @@
-running <a href="{{bingus_info.repository}}" target="_blank">{{bingus_info.name}}</a> v{{bingus_info.version}}
+running
+<a href="{{bingus_info.repository}}" target="_blank">{{bingus_info.name}}</a>
+v{{bingus_info.version}}
 {{#if rendered_in}}
-<b> - </b>
+	<b> - </b>
 {{/if}}
 {{#each rendered_in}}
-	{{#if (eq @key "ParsedAndRendered")}}
-		<span class="tooltipped" title="parsing took {{duration this.1}}">parsed</span>
+	{{#if (eq @key "Rendered")}}
+		<span class="tooltipped" title="parsing metadata took {{duration this.parsed}}">parsed meta</span>
 		and
-		<span class="tooltipped" title="rendering took {{duration this.2}}">rendered</span>
+		<span class="tooltipped" title="rendering took {{duration this.rendered}}">rendered</span>
 		in
-		{{duration this.0}}
-
+		{{duration this.total}}
 	{{else if (eq @key "Cached")}}
 		retrieved from cache in
+		{{duration this}}
+	{{else if (eq @key "Fetched")}}
+		fetched in
 		{{duration this}}
 	{{/if}}
 {{/each}}

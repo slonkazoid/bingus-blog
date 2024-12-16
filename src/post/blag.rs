@@ -16,16 +16,24 @@ use tracing::{debug, error};
 use crate::error::PostError;
 use crate::post::Filter;
 
+use super::cache::CacheGuard;
 use super::{ApplyFilters, PostManager, PostMetadata, RenderStats, ReturnedPost};
 
 pub struct Blag {
     root: Arc<Path>,
     blag_bin: Arc<Path>,
+    _cache: Option<Arc<CacheGuard>>,
+    _fastblag: bool,
 }
 
 impl Blag {
-    pub fn new(root: Arc<Path>, blag_bin: Arc<Path>) -> Blag {
-        Self { root, blag_bin }
+    pub fn new(root: Arc<Path>, blag_bin: Arc<Path>, _cache: Option<Arc<CacheGuard>>) -> Blag {
+        Self {
+            root,
+            blag_bin,
+            _cache,
+            _fastblag: false,
+        }
     }
 }
 
@@ -94,6 +102,7 @@ impl PostManager for Blag {
         name: &str,
         _query: &HashMap<String, Value>,
     ) -> Result<ReturnedPost, PostError> {
+        let start = Instant::now();
         let mut path = self.root.join(name);
 
         if name.ends_with(".sh") {
@@ -117,7 +126,6 @@ impl PostManager for Blag {
             path.add_extension("sh");
         }
 
-        let start = Instant::now();
         let stat = tokio::fs::metadata(&path)
             .await
             .map_err(|err| match err.kind() {
@@ -146,6 +154,9 @@ impl PostManager for Blag {
 
         let mut meta: PostMetadata = serde_json::from_str(&buf)?;
         meta.name = name.to_string();
+        let parsed = start.elapsed();
+
+        let rendering = Instant::now();
         buf.clear();
         reader.read_to_string(&mut buf).await?;
 
@@ -157,12 +168,17 @@ impl PostManager for Blag {
             return Err(PostError::RenderError(exit_status.to_string()));
         }
 
-        let elapsed = start.elapsed();
+        let rendered = rendering.elapsed();
+        let total = start.elapsed();
 
         Ok(ReturnedPost::Rendered(
             meta,
             buf,
-            RenderStats::ParsedAndRendered(elapsed, elapsed, elapsed),
+            RenderStats::Rendered {
+                parsed,
+                rendered,
+                total,
+            },
         ))
     }
 

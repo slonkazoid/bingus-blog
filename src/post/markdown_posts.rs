@@ -275,7 +275,11 @@ impl PostManager for MarkdownPosts {
                 Ok(ReturnedPost::Rendered(
                     metadata,
                     rendered,
-                    RenderStats::ParsedAndRendered(start.elapsed(), stats.0, stats.1),
+                    RenderStats::Rendered {
+                        total: start.elapsed(),
+                        parsed: stats.0,
+                        rendered: stats.1,
+                    },
                 ))
             }
         }
