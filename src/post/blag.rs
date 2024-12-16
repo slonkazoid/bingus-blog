@@ -27,21 +27,21 @@ use super::{ApplyFilters, PostManager, PostMetadata, RenderStats, ReturnedPost};
 
 #[derive(Deserialize, Debug)]
 struct BlagMetadata {
-    pub title: String,
-    pub description: String,
-    pub author: String,
-    pub icon: Option<String>,
-    pub icon_alt: Option<String>,
-    pub color: Option<String>,
+    pub title: Arc<str>,
+    pub description: Arc<str>,
+    pub author: Arc<str>,
+    pub icon: Option<Arc<str>>,
+    pub icon_alt: Option<Arc<str>>,
+    pub color: Option<Arc<str>>,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     #[serde(default)]
-    pub tags: BTreeSet<String>,
+    pub tags: BTreeSet<Arc<str>>,
     pub dont_cache: bool,
 }
 
 impl BlagMetadata {
-    pub fn into_full(self, name: String) -> (PostMetadata, bool) {
+    pub fn into_full(self, name: Arc<str>) -> (PostMetadata, bool) {
         (
             PostMetadata {
                 name,
@@ -79,7 +79,7 @@ impl Blag {
 
     async fn render(
         &self,
-        name: &str,
+        name: Arc<str>,
         path: impl AsRef<Path>,
         query_json: String,
     ) -> Result<(PostMetadata, String, (Duration, Duration), bool), PostError> {
@@ -105,7 +105,7 @@ impl Blag {
 
         let blag_meta: BlagMetadata = serde_json::from_str(&buf)?;
         debug!("blag meta: {blag_meta:?}");
-        let (meta, dont_cache) = blag_meta.into_full(name.to_string());
+        let (meta, dont_cache) = blag_meta.into_full(name);
         let parsed = start.elapsed();
 
         let rendering = Instant::now();
@@ -132,7 +132,7 @@ impl PostManager for Blag {
         &self,
         filters: &[Filter<'_>],
         query: &IndexMap<String, Value>,
-    ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
+    ) -> Result<Vec<(PostMetadata, Arc<str>, RenderStats)>, PostError> {
         let mut set = FuturesUnordered::new();
         let mut posts = Vec::new();
         let mut files = tokio::fs::read_dir(&self.root).await?;
@@ -149,17 +149,16 @@ impl PostManager for Blag {
 
             let file_type = entry.file_type().await?;
             if file_type.is_file() {
-                let name = match entry.file_name().into_string() {
+                let mut name = match entry.file_name().into_string() {
                     Ok(v) => v,
                     Err(_) => {
                         continue;
                     }
                 };
 
-                if name.ends_with(".sh") {
-                    set.push(
-                        async move { self.get_post(name.trim_end_matches(".sh"), query).await },
-                    );
+                if self.is_raw(&name) {
+                    name.truncate(3);
+                    set.push(self.get_post(name.into(), query));
                 }
             }
         }
@@ -167,8 +166,8 @@ impl PostManager for Blag {
         while let Some(result) = set.next().await {
             let post = match result {
                 Ok(v) => match v {
-                    ReturnedPost::Rendered(meta, content, stats) => (meta, content, stats),
-                    ReturnedPost::Raw(..) => unreachable!(),
+                    ReturnedPost::Rendered { meta, body, perf } => (meta, body, perf),
+                    ReturnedPost::Raw { .. } => unreachable!(),
                 },
                 Err(err) => {
                     error!("error while rendering blagpost: {err}");
@@ -189,29 +188,29 @@ impl PostManager for Blag {
     #[instrument(level = "info", skip(self))]
     async fn get_post(
         &self,
-        name: &str,
+        name: Arc<str>,
         query: &IndexMap<String, Value>,
     ) -> Result<ReturnedPost, PostError> {
         let start = Instant::now();
-        let mut path = self.root.join(name);
+        let mut path = self.root.join(&*name);
 
-        if name.ends_with(".sh") {
-            let mut buf = Vec::new();
+        if self.is_raw(&name) {
+            let mut buffer = Vec::new();
             let mut file =
                 OpenOptions::new()
                     .read(true)
                     .open(&path)
                     .await
                     .map_err(|err| match err.kind() {
-                        std::io::ErrorKind::NotFound => PostError::NotFound(name.to_string()),
+                        std::io::ErrorKind::NotFound => PostError::NotFound(name),
                         _ => PostError::IoError(err),
                     })?;
-            file.read_to_end(&mut buf).await?;
+            file.read_to_end(&mut buffer).await?;
 
-            return Ok(ReturnedPost::Raw(
-                buf,
-                HeaderValue::from_static("text/x-shellscript"),
-            ));
+            return Ok(ReturnedPost::Raw {
+                buffer,
+                content_type: HeaderValue::from_static("text/x-shellscript"),
+            });
         } else {
             path.add_extension("sh");
         }
@@ -219,12 +218,12 @@ impl PostManager for Blag {
         let stat = tokio::fs::metadata(&path)
             .await
             .map_err(|err| match err.kind() {
-                std::io::ErrorKind::NotFound => PostError::NotFound(name.to_string()),
+                std::io::ErrorKind::NotFound => PostError::NotFound(name.clone()),
                 _ => PostError::IoError(err),
             })?;
 
         if !stat.is_file() {
-            return Err(PostError::NotFound(name.to_string()));
+            return Err(PostError::NotFound(name));
         }
 
         let mtime = as_secs(&stat.modified()?);
@@ -235,67 +234,69 @@ impl PostManager for Blag {
         let query_hash = hasher.finish();
 
         let post = if let Some(cache) = &self.cache {
-            if let Some(CacheValue {
-                metadata, rendered, ..
-            }) = cache.lookup(name, mtime, query_hash).await
+            if let Some(CacheValue { meta, body, .. }) =
+                cache.lookup(&name, mtime, query_hash).await
             {
-                ReturnedPost::Rendered(metadata, rendered, RenderStats::Cached(start.elapsed()))
+                ReturnedPost::Rendered {
+                    meta,
+                    body,
+                    perf: RenderStats::Cached(start.elapsed()),
+                }
             } else {
                 let (meta, content, (parsed, rendered), dont_cache) =
-                    self.render(name, path, query_json).await?;
+                    self.render(name.clone(), path, query_json).await?;
+                let body = content.into();
 
                 if !dont_cache {
                     cache
-                        .insert(
-                            name.to_string(),
-                            meta.clone(),
-                            mtime,
-                            content.clone(),
-                            query_hash,
-                        )
+                        .insert(name, meta.clone(), mtime, Arc::clone(&body), query_hash)
                         .await
                         .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0));
                 }
 
                 let total = start.elapsed();
-                ReturnedPost::Rendered(
+                ReturnedPost::Rendered {
                     meta,
-                    content,
-                    RenderStats::Rendered {
+                    body,
+                    perf: RenderStats::Rendered {
                         total,
                         parsed,
                         rendered,
                     },
-                )
+                }
             }
         } else {
             let (meta, content, (parsed, rendered), ..) =
                 self.render(name, path, query_json).await?;
 
             let total = start.elapsed();
-            ReturnedPost::Rendered(
+            ReturnedPost::Rendered {
                 meta,
-                content,
-                RenderStats::Rendered {
+                body: content.into(),
+                perf: RenderStats::Rendered {
                     total,
                     parsed,
                     rendered,
                 },
-            )
+            }
         };
 
-        if let ReturnedPost::Rendered(.., stats) = &post {
-            info!("rendered blagpost in {:?}", stats);
+        if let ReturnedPost::Rendered { perf, .. } = &post {
+            info!("rendered blagpost in {:?}", perf);
         }
 
         Ok(post)
     }
 
-    async fn as_raw(&self, name: &str) -> Result<Option<String>, PostError> {
+    fn is_raw(&self, name: &str) -> bool {
+        name.ends_with(".sh")
+    }
+
+    fn as_raw(&self, name: &str) -> Option<String> {
         let mut buf = String::with_capacity(name.len() + 3);
         buf += name;
         buf += ".sh";
 
-        Ok(Some(buf))
+        Some(buf)
     }
 }

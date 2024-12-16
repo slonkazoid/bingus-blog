@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use askama_axum::Template;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -14,7 +16,7 @@ pub enum PostError {
     #[error("failed to render post: {0}")]
     RenderError(String),
     #[error("post {0:?} not found")]
-    NotFound(String),
+    NotFound(Arc<str>),
 }
 
 impl From<fronma::error::Error> for PostError {

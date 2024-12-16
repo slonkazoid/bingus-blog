@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,7 +12,6 @@ use include_dir::{include_dir, Dir};
 use indexmap::IndexMap;
 use rss::{Category, ChannelBuilder, ItemBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
 use serde_value::Value;
 use tokio::sync::RwLock;
 use tower::service_fn;
@@ -57,7 +55,7 @@ struct IndexTemplate<'a> {
     posts: Vec<PostMetadata>,
     rss: bool,
     js: bool,
-    tags: Map<String, serde_json::Value>,
+    tags: IndexMap<Arc<str>, u64>,
     joined_tags: String,
     style: &'a StyleConfig,
 }
@@ -66,13 +64,13 @@ struct IndexTemplate<'a> {
 struct PostTemplate<'a> {
     bingus_info: &'a BingusInfo,
     meta: &'a PostMetadata,
-    rendered: String,
+    rendered: Arc<str>,
     rendered_in: RenderStats,
     js: bool,
     color: Option<&'a str>,
     joined_tags: String,
     style: &'a StyleConfig,
-    raw_name: Option<&'a str>,
+    raw_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -84,12 +82,12 @@ struct QueryParams {
     other: IndexMap<String, Value>,
 }
 
-fn collect_tags(posts: &Vec<PostMetadata>) -> Map<String, serde_json::Value> {
-    let mut tags = HashMap::new();
+fn collect_tags(posts: &Vec<PostMetadata>) -> IndexMap<Arc<str>, u64> {
+    let mut tags = IndexMap::new();
 
     for post in posts {
         for tag in &post.tags {
-            if let Some((existing_tag, count)) = tags.remove_entry(tag) {
+            if let Some((existing_tag, count)) = tags.swap_remove_entry(tag) {
                 tags.insert(existing_tag, count + 1);
             } else {
                 tags.insert(tag.clone(), 1);
@@ -97,21 +95,13 @@ fn collect_tags(posts: &Vec<PostMetadata>) -> Map<String, serde_json::Value> {
         }
     }
 
-    let mut tags: Vec<(String, u64)> = tags.into_iter().collect();
+    tags.sort_unstable_by(|k1, _v1, k2, _v2| k1.cmp(k2));
+    tags.sort_by(|_k1, v1, _k2, v2| v1.cmp(v2));
 
-    tags.sort_unstable_by_key(|(v, _)| v.clone());
-    tags.sort_by_key(|(_, v)| -(*v as i64));
-
-    let mut map = Map::new();
-
-    for tag in tags.into_iter() {
-        map.insert(tag.0, tag.1.into());
-    }
-
-    map
+    tags
 }
 
-fn join_tags_for_meta(tags: &Map<String, serde_json::Value>, delim: &str) -> String {
+fn join_tags_for_meta(tags: &IndexMap<Arc<str>, u64>, delim: &str) -> String {
     let mut s = String::new();
     let tags = tags.keys().enumerate();
     let len = tags.len();
@@ -207,21 +197,21 @@ async fn rss(
     for (metadata, content, _) in posts {
         channel.item(
             ItemBuilder::default()
-                .title(metadata.title)
-                .description(metadata.description)
-                .author(metadata.author)
+                .title(metadata.title.to_string())
+                .description(metadata.description.to_string())
+                .author(metadata.author.to_string())
                 .categories(
                     metadata
                         .tags
                         .into_iter()
                         .map(|tag| Category {
-                            name: tag,
+                            name: tag.to_string(),
                             domain: None,
                         })
                         .collect::<Vec<Category>>(),
                 )
                 .pub_date(metadata.created_at.map(|date| date.to_rfc2822()))
-                .content(content)
+                .content(content.to_string())
                 .link(
                     config
                         .rss
@@ -246,15 +236,18 @@ async fn post(
         templates: reg,
         ..
     }): State<AppState>,
-    Path(name): Path<String>,
+    Path(name): Path<Arc<str>>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<impl IntoResponse> {
-    match posts.get_post(&name, &query.other).await? {
-        ReturnedPost::Rendered(ref meta, rendered, rendered_in) => {
+    match posts.get_post(name.clone(), &query.other).await? {
+        ReturnedPost::Rendered {
+            ref meta,
+            body: rendered,
+            perf: rendered_in,
+        } => {
             let joined_tags = meta.tags.join(", ");
 
             let reg = reg.read().await;
-            let raw_name;
             let rendered = reg.render(
                 "post",
                 &PostTemplate {
@@ -269,20 +262,19 @@ async fn post(
                         .or(config.style.default_color.as_deref()),
                     joined_tags,
                     style: &config.style,
-                    raw_name: if config.markdown_access {
-                        raw_name = posts.as_raw(&meta.name).await?;
-                        raw_name.as_deref()
-                    } else {
-                        None
-                    },
+                    raw_name: config
+                        .markdown_access
+                        .then(|| posts.as_raw(&meta.name))
+                        .unwrap_or(None),
                 },
             );
             drop(reg);
             Ok(Html(rendered?).into_response())
         }
-        ReturnedPost::Raw(body, content_type) => {
-            Ok(([(CONTENT_TYPE, content_type)], body).into_response())
-        }
+        ReturnedPost::Raw {
+            buffer,
+            content_type,
+        } => Ok(([(CONTENT_TYPE, content_type)], buffer).into_response()),
     }
 }
 

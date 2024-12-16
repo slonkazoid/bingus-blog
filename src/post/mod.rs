@@ -2,9 +2,11 @@ pub mod blag;
 pub mod cache;
 pub mod markdown_posts;
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use axum::{async_trait, http::HeaderValue};
+use axum::async_trait;
+use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -17,19 +19,19 @@ pub use markdown_posts::MarkdownPosts;
 // TODO: replace String with Arc<str>
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PostMetadata {
-    pub name: String,
-    pub title: String,
-    pub description: String,
-    pub author: String,
-    pub icon: Option<String>,
-    pub icon_alt: Option<String>,
-    pub color: Option<String>,
+    pub name: Arc<str>,
+    pub title: Arc<str>,
+    pub description: Arc<str>,
+    pub author: Arc<str>,
+    pub icon: Option<Arc<str>>,
+    pub icon_alt: Option<Arc<str>>,
+    pub color: Option<Arc<str>>,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
-    pub tags: Vec<String>,
+    pub tags: Vec<Arc<str>>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 #[allow(unused)]
 pub enum RenderStats {
     Cached(Duration),
@@ -39,13 +41,25 @@ pub enum RenderStats {
         rendered: Duration,
     },
     Fetched(Duration),
+    Other {
+        verb: Arc<str>,
+        time: Duration,
+    },
     Unknown,
 }
 
 #[allow(clippy::large_enum_variant)] // Raw will be returned very rarely
+#[derive(Debug, Clone)]
 pub enum ReturnedPost {
-    Rendered(PostMetadata, String, RenderStats),
-    Raw(Vec<u8>, HeaderValue),
+    Rendered {
+        meta: PostMetadata,
+        body: Arc<str>,
+        perf: RenderStats,
+    },
+    Raw {
+        buffer: Vec<u8>,
+        content_type: HeaderValue,
+    },
 }
 
 pub enum Filter<'a> {
@@ -57,7 +71,7 @@ impl Filter<'_> {
         match self {
             Filter::Tags(tags) => tags
                 .iter()
-                .any(|tag| meta.tags.iter().any(|meta_tag| meta_tag == tag)),
+                .any(|tag| meta.tags.iter().any(|meta_tag| &**meta_tag == *tag)),
         }
     }
 }
@@ -93,7 +107,7 @@ pub trait PostManager {
         &self,
         filters: &[Filter<'_>],
         query: &IndexMap<String, Value>,
-    ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError>;
+    ) -> Result<Vec<(PostMetadata, Arc<str>, RenderStats)>, PostError>;
 
     async fn get_max_n_post_metadata_with_optional_tag_sorted(
         &self,
@@ -119,25 +133,30 @@ pub trait PostManager {
     #[allow(unused)]
     async fn get_post_metadata(
         &self,
-        name: &str,
+        name: Arc<str>,
         query: &IndexMap<String, Value>,
     ) -> Result<PostMetadata, PostError> {
-        match self.get_post(name, query).await? {
-            ReturnedPost::Rendered(metadata, ..) => Ok(metadata),
-            ReturnedPost::Raw(..) => Err(PostError::NotFound(name.to_string())),
+        match self.get_post(name.clone(), query).await? {
+            ReturnedPost::Rendered { meta, .. } => Ok(meta),
+            ReturnedPost::Raw { .. } => Err(PostError::NotFound(name)),
         }
     }
 
     async fn get_post(
         &self,
-        name: &str,
+        name: Arc<str>,
         query: &IndexMap<String, Value>,
     ) -> Result<ReturnedPost, PostError>;
 
     async fn cleanup(&self) {}
 
     #[allow(unused)]
-    async fn as_raw(&self, name: &str) -> Result<Option<String>, PostError> {
-        Ok(None)
+    fn is_raw(&self, name: &str) -> bool {
+        false
+    }
+
+    #[allow(unused)]
+    fn as_raw(&self, name: &str) -> Option<String> {
+        None
     }
 }

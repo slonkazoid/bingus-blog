@@ -24,29 +24,29 @@ use crate::config::Config;
 use crate::markdown_render::{build_syntect, render};
 use crate::systemtime_as_secs::as_secs;
 
-use super::cache::CacheGuard;
+use super::cache::{CacheGuard, CacheValue};
 use super::{
     ApplyFilters, Filter, PostError, PostManager, PostMetadata, RenderStats, ReturnedPost,
 };
 
 #[derive(Deserialize)]
 struct FrontMatter {
-    pub title: String,
-    pub description: String,
-    pub author: String,
-    pub icon: Option<String>,
-    pub icon_alt: Option<String>,
-    pub color: Option<String>,
+    pub title: Arc<str>,
+    pub description: Arc<str>,
+    pub author: Arc<str>,
+    pub icon: Option<Arc<str>>,
+    pub icon_alt: Option<Arc<str>>,
+    pub color: Option<Arc<str>>,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     #[serde(default)]
-    pub tags: BTreeSet<String>,
+    pub tags: BTreeSet<Arc<str>>,
 }
 
 impl FrontMatter {
     pub fn into_full(
         self,
-        name: String,
+        name: Arc<str>,
         created: Option<SystemTime>,
         modified: Option<SystemTime>,
     ) -> PostMetadata {
@@ -94,9 +94,9 @@ impl MarkdownPosts {
 
     async fn parse_and_render(
         &self,
-        name: String,
+        name: Arc<str>,
         path: impl AsRef<Path>,
-    ) -> Result<(PostMetadata, String, (Duration, Duration)), PostError> {
+    ) -> Result<(PostMetadata, Arc<str>, (Duration, Duration)), PostError> {
         let parsing_start = Instant::now();
         let mut file = match tokio::fs::OpenOptions::new().read(true).open(&path).await {
             Ok(val) => val,
@@ -117,16 +117,16 @@ impl MarkdownPosts {
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let post = render(body, Some(&self.syntect));
+        let post = render(body, Some(&self.syntect)).into();
         let rendering = before_render.elapsed();
 
         if let Some(cache) = &self.cache {
             cache
                 .insert(
-                    name.to_string(),
+                    name.clone(),
                     metadata.clone(),
                     as_secs(&modified),
-                    post.clone(),
+                    Arc::clone(&post),
                     self.render_hash,
                 )
                 .await
@@ -143,7 +143,7 @@ impl PostManager for MarkdownPosts {
         &self,
         filters: &[Filter<'_>],
         query: &IndexMap<String, Value>,
-    ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
+    ) -> Result<Vec<(PostMetadata, Arc<str>, RenderStats)>, PostError> {
         let mut posts = Vec::new();
 
         let mut read_dir = fs::read_dir(&self.config.dirs.posts).await?;
@@ -157,13 +157,14 @@ impl PostManager for MarkdownPosts {
                     .file_stem()
                     .unwrap()
                     .to_string_lossy()
-                    .to_string();
+                    .to_string()
+                    .into();
 
-                let post = self.get_post(&name, query).await?;
-                if let ReturnedPost::Rendered(meta, content, stats) = post
+                let post = self.get_post(Arc::clone(&name), query).await?;
+                if let ReturnedPost::Rendered { meta, body, perf } = post
                     && meta.apply_filters(filters)
                 {
-                    posts.push((meta, content, stats));
+                    posts.push((meta, body, perf));
                 }
             }
         }
@@ -185,7 +186,8 @@ impl PostManager for MarkdownPosts {
 
             if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
                 let mtime = as_secs(&stat.modified()?);
-                let name = String::from(path.file_stem().unwrap().to_string_lossy());
+                let name: Arc<str> =
+                    String::from(path.file_stem().unwrap().to_string_lossy()).into();
 
                 if let Some(cache) = &self.cache
                     && let Some(hit) = cache.lookup_metadata(&name, mtime).await
@@ -218,42 +220,49 @@ impl PostManager for MarkdownPosts {
     #[instrument(level = "info", skip(self))]
     async fn get_post(
         &self,
-        name: &str,
+        name: Arc<str>,
         _query: &IndexMap<String, Value>,
     ) -> Result<ReturnedPost, PostError> {
-        let post = if self.config.markdown_access && name.ends_with(".md") {
-            let path = self.config.dirs.posts.join(name);
+        let post = if self.config.markdown_access && self.is_raw(&name) {
+            let path = self.config.dirs.posts.join(&*name);
 
             let mut file = match tokio::fs::OpenOptions::new().read(true).open(&path).await {
                 Ok(value) => value,
                 Err(err) => match err.kind() {
                     io::ErrorKind::NotFound => {
                         if let Some(cache) = &self.cache {
-                            cache.remove(name).await;
+                            cache.remove(&name).await;
                         }
-                        return Err(PostError::NotFound(name.to_string()));
+                        return Err(PostError::NotFound(name));
                     }
                     _ => return Err(PostError::IoError(err)),
                 },
             };
 
-            let mut buf = Vec::with_capacity(4096);
+            let mut buffer = Vec::with_capacity(4096);
 
-            file.read_to_end(&mut buf).await?;
+            file.read_to_end(&mut buffer).await?;
 
-            ReturnedPost::Raw(buf, HeaderValue::from_static("text/plain"))
+            ReturnedPost::Raw {
+                buffer,
+                content_type: HeaderValue::from_static("text/plain"),
+            }
         } else {
             let start = Instant::now();
-            let path = self.config.dirs.posts.join(name.to_owned() + ".md");
+            let path = self
+                .config
+                .dirs
+                .posts
+                .join(self.as_raw(&name).unwrap_or_else(|| unreachable!()));
 
             let stat = match tokio::fs::metadata(&path).await {
                 Ok(value) => value,
                 Err(err) => match err.kind() {
                     io::ErrorKind::NotFound => {
                         if let Some(cache) = &self.cache {
-                            cache.remove(name).await;
+                            cache.remove(&name).await;
                         }
-                        return Err(PostError::NotFound(name.to_string()));
+                        return Err(PostError::NotFound(name));
                     }
                     _ => return Err(PostError::IoError(err)),
                 },
@@ -261,30 +270,30 @@ impl PostManager for MarkdownPosts {
             let mtime = as_secs(&stat.modified()?);
 
             if let Some(cache) = &self.cache
-                && let Some(hit) = cache.lookup(name, mtime, self.render_hash).await
+                && let Some(CacheValue { meta, body, .. }) =
+                    cache.lookup(&name, mtime, self.render_hash).await
             {
-                ReturnedPost::Rendered(
-                    hit.metadata,
-                    hit.rendered,
-                    RenderStats::Cached(start.elapsed()),
-                )
+                ReturnedPost::Rendered {
+                    meta,
+                    body,
+                    perf: RenderStats::Cached(start.elapsed()),
+                }
             } else {
-                let (metadata, rendered, stats) =
-                    self.parse_and_render(name.to_string(), path).await?;
-                ReturnedPost::Rendered(
-                    metadata,
-                    rendered,
-                    RenderStats::Rendered {
+                let (meta, body, stats) = self.parse_and_render(name, path).await?;
+                ReturnedPost::Rendered {
+                    meta,
+                    body,
+                    perf: RenderStats::Rendered {
                         total: start.elapsed(),
                         parsed: stats.0,
                         rendered: stats.1,
                     },
-                )
+                }
             }
         };
 
-        if let ReturnedPost::Rendered(.., stats) = &post {
-            info!("rendered post in {:?}", stats);
+        if let ReturnedPost::Rendered { perf, .. } = &post {
+            info!("rendered post in {:?}", perf);
         }
 
         Ok(post)
@@ -294,20 +303,29 @@ impl PostManager for MarkdownPosts {
         if let Some(cache) = &self.cache {
             cache
                 .cleanup(|name| {
-                    std::fs::metadata(self.config.dirs.posts.join(name.to_owned() + ".md"))
-                        .ok()
-                        .and_then(|metadata| metadata.modified().ok())
-                        .map(|mtime| as_secs(&mtime))
+                    std::fs::metadata(
+                        self.config
+                            .dirs
+                            .posts
+                            .join(self.as_raw(name).unwrap_or_else(|| unreachable!())),
+                    )
+                    .ok()
+                    .and_then(|metadata| metadata.modified().ok())
+                    .map(|mtime| as_secs(&mtime))
                 })
                 .await
         }
     }
 
-    async fn as_raw(&self, name: &str) -> Result<Option<String>, PostError> {
+    fn is_raw(&self, name: &str) -> bool {
+        name.ends_with(".md")
+    }
+
+    fn as_raw(&self, name: &str) -> Option<String> {
         let mut buf = String::with_capacity(name.len() + 3);
         buf += name;
         buf += ".md";
 
-        Ok(Some(buf))
+        Some(buf)
     }
 }

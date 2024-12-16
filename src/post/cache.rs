@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::ops::Deref;
+use std::sync::Arc;
 
 use crate::config::CacheConfig;
 use crate::post::PostMetadata;
@@ -10,18 +11,18 @@ use tokio::io::AsyncReadExt;
 use tracing::{debug, info, instrument};
 
 /// do not persist cache if this version number changed
-pub const CACHE_VERSION: u16 = 2;
+pub const CACHE_VERSION: u16 = 3;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CacheValue {
-    pub metadata: PostMetadata,
-    pub rendered: String,
+    pub meta: PostMetadata,
+    pub body: Arc<str>,
     pub mtime: u64,
     pub extra: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct FileCache(HashMap<String, CacheValue>, u16);
+pub struct FileCache(HashMap<Arc<str>, CacheValue>, u16);
 
 impl Default for FileCache {
     fn default() -> Self {
@@ -50,7 +51,7 @@ impl FileCache {
             Some(entry) => {
                 let cached = entry.get();
                 if mtime <= cached.mtime {
-                    Some(cached.metadata.clone())
+                    Some(cached.meta.clone())
                 } else {
                     let _ = entry.remove();
                     None
@@ -62,15 +63,15 @@ impl FileCache {
 
     pub async fn insert(
         &self,
-        name: String,
+        name: Arc<str>,
         metadata: PostMetadata,
         mtime: u64,
-        rendered: String,
+        rendered: Arc<str>,
         extra: u64,
-    ) -> Result<(), (String, (PostMetadata, String))> {
+    ) -> Result<(), (Arc<str>, (PostMetadata, Arc<str>))> {
         let value = CacheValue {
-            metadata,
-            rendered,
+            meta: metadata,
+            body: rendered,
             mtime,
             extra,
         };
@@ -84,13 +85,13 @@ impl FileCache {
             self.0
                 .insert_async(name, value)
                 .await
-                .map_err(|x| (x.0, (x.1.metadata, x.1.rendered)))
+                .map_err(|x| (x.0, (x.1.meta, x.1.body)))
         } else {
             Ok(())
         }
     }
 
-    pub async fn remove(&self, name: &str) -> Option<(String, CacheValue)> {
+    pub async fn remove(&self, name: &str) -> Option<(Arc<str>, CacheValue)> {
         self.0.remove_async(name).await
     }
 
