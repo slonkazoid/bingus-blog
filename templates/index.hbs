@@ -35,17 +35,17 @@
 						<label for="sort-name">name</label>
 					</form>
 				{{/if}}
-				{{#each posts}}
-					<div id="posts">
-						<div class="post">
-							<a href="/posts/{{name}}"><b>{{title}}</b></a>
-							<span class="post-author">- by {{author}}</span>
-							<br />
-							{{description}}<br />
-							{{>post_table post style=@root.style}}
-						</div>
-					</div>
-				{{else}} there are no posts right now. check back later! {{/each}}
+				<div id="posts">
+					{{#each posts}}
+							<div class="post">
+								<a href="/posts/{{name}}"><b>{{title}}</b></a>
+								<span class="post-author">- by {{author}}</span>
+								<br />
+								{{description}}<br />
+								{{>post_table post style=@root.style}}
+							</div>
+					{{else}} there are no posts right now. check back later! {{/each}}
+				</div>
 			</div>
 
 			{{#if (gt (len tags) 0)}}
