@@ -82,6 +82,7 @@ impl Blag {
         name: Arc<str>,
         path: impl AsRef<Path>,
         query_json: String,
+        dont_cache: bool,
     ) -> Result<(PostMetadata, String, (Duration, Duration), bool), PostError> {
         let start = Instant::now();
 
@@ -90,6 +91,7 @@ impl Blag {
         let mut cmd = tokio::process::Command::new(&*self.blag_bin)
             .arg(path.as_ref())
             .env("BLAG_QUERY", query_json)
+            .env("DONT_CACHE", if dont_cache { "1" } else { "" })
             .stdout(Stdio::piped())
             .spawn()
             .map_err(|err| {
@@ -232,6 +234,7 @@ impl PostManager for Blag {
         let mut hasher = DefaultHasher::new();
         query_json.hash(&mut hasher);
         let query_hash = hasher.finish();
+        let suggest_dont_cache = !query.is_empty();
 
         let post = if let Some(cache) = &self.cache {
             if let Some(CacheValue { meta, body, .. }) =
@@ -243,8 +246,9 @@ impl PostManager for Blag {
                     perf: RenderStats::Cached(start.elapsed()),
                 }
             } else {
-                let (meta, content, (parsed, rendered), dont_cache) =
-                    self.render(name.clone(), path, query_json).await?;
+                let (meta, content, (parsed, rendered), dont_cache) = self
+                    .render(name.clone(), path, query_json, suggest_dont_cache)
+                    .await?;
                 let body = content.into();
 
                 if !dont_cache {
@@ -266,8 +270,9 @@ impl PostManager for Blag {
                 }
             }
         } else {
-            let (meta, content, (parsed, rendered), ..) =
-                self.render(name, path, query_json).await?;
+            let (meta, content, (parsed, rendered), ..) = self
+                .render(name, path, query_json, suggest_dont_cache)
+                .await?;
 
             let total = start.elapsed();
             ReturnedPost::Rendered {
