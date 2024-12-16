@@ -26,14 +26,14 @@ for bingus-blog viewers: [see original document](https://git.slonk.ing/slonk/bin
 - [ ] blog thumbnail and favicon
 - [ ] sort asc/desc
 - [ ] extend syntect options
-- [ ] ^ fix syntect mutex poisoning
+- [x] ^ fix syntect mutex poisoning
 - [ ] better error reporting and error pages
 - [ ] better tracing
 - [ ] replace HashMap with HashCache once i implement [this](https://github.com/wvwwvwwv/scalable-concurrent-containers/issues/139)
 - [ ] make date parsing less strict
-- [ ] improve home page
+- [x] improve home page
 - [ ] multi-language support
-- [ ] add credits
+- [x] add credits
 - [x] be blazingly fast
 - [x] 100+ MiB binary size
 
@@ -143,3 +143,7 @@ feature requests provided they fit the project and it's values.
 
 most just ping me on discord with feature requests, but if your request is
 non-trivial, please create an issue [here](https://git.slonk.ing/slonk/bingus-blog/issues).
+
+## Blagging
+
+you've scrolled this far. you deserve to know [the truth](https://git.slonk.ing/slonk/blag).
