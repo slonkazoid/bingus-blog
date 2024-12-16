@@ -42,6 +42,7 @@ fronma = "0.2.0"
 futures = "0.3.31"
 handlebars = "6.0.0"
 include_dir = "0.7.4"
+indexmap = { version = "2.7.0", features = ["serde"] }
 mime_guess = "2.0.5"
 notify-debouncer-full = { version = "0.3.1", default-features = false }
 rss = "2.0.7"

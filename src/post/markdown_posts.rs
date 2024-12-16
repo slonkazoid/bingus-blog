@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io;
 use std::path::Path;
@@ -13,11 +13,12 @@ use chrono::{DateTime, Utc};
 use color_eyre::eyre::{self, Context};
 use comrak::plugins::syntect::SyntectAdapter;
 use fronma::parser::{parse, ParsedData};
+use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_value::Value;
 use tokio::fs;
 use tokio::io::AsyncReadExt;
-use tracing::warn;
+use tracing::{info, instrument, warn};
 
 use crate::config::Config;
 use crate::markdown_render::{build_syntect, render};
@@ -141,7 +142,7 @@ impl PostManager for MarkdownPosts {
     async fn get_all_posts(
         &self,
         filters: &[Filter<'_>],
-        query: &HashMap<String, Value>,
+        query: &IndexMap<String, Value>,
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
         let mut posts = Vec::new();
 
@@ -173,7 +174,7 @@ impl PostManager for MarkdownPosts {
     async fn get_all_post_metadata(
         &self,
         filters: &[Filter<'_>],
-        _query: &HashMap<String, Value>,
+        _query: &IndexMap<String, Value>,
     ) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = Vec::new();
 
@@ -214,12 +215,13 @@ impl PostManager for MarkdownPosts {
         Ok(posts)
     }
 
+    #[instrument(level = "info", skip(self))]
     async fn get_post(
         &self,
         name: &str,
-        _query: &HashMap<String, Value>,
+        _query: &IndexMap<String, Value>,
     ) -> Result<ReturnedPost, PostError> {
-        if self.config.markdown_access && name.ends_with(".md") {
+        let post = if self.config.markdown_access && name.ends_with(".md") {
             let path = self.config.dirs.posts.join(name);
 
             let mut file = match tokio::fs::OpenOptions::new().read(true).open(&path).await {
@@ -239,10 +241,7 @@ impl PostManager for MarkdownPosts {
 
             file.read_to_end(&mut buf).await?;
 
-            Ok(ReturnedPost::Raw(
-                buf,
-                HeaderValue::from_static("text/plain"),
-            ))
+            ReturnedPost::Raw(buf, HeaderValue::from_static("text/plain"))
         } else {
             let start = Instant::now();
             let path = self.config.dirs.posts.join(name.to_owned() + ".md");
@@ -264,15 +263,15 @@ impl PostManager for MarkdownPosts {
             if let Some(cache) = &self.cache
                 && let Some(hit) = cache.lookup(name, mtime, self.render_hash).await
             {
-                Ok(ReturnedPost::Rendered(
+                ReturnedPost::Rendered(
                     hit.metadata,
                     hit.rendered,
                     RenderStats::Cached(start.elapsed()),
-                ))
+                )
             } else {
                 let (metadata, rendered, stats) =
                     self.parse_and_render(name.to_string(), path).await?;
-                Ok(ReturnedPost::Rendered(
+                ReturnedPost::Rendered(
                     metadata,
                     rendered,
                     RenderStats::Rendered {
@@ -280,9 +279,15 @@ impl PostManager for MarkdownPosts {
                         parsed: stats.0,
                         rendered: stats.1,
                     },
-                ))
+                )
             }
+        };
+
+        if let ReturnedPost::Rendered(.., stats) = &post {
+            info!("rendered post in {:?}", stats);
         }
+
+        Ok(post)
     }
 
     async fn cleanup(&self) {

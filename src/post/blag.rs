@@ -1,39 +1,128 @@
-use std::collections::HashMap;
+use std::collections::BTreeSet;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::async_trait;
 use axum::http::HeaderValue;
+use chrono::{DateTime, Utc};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use indexmap::IndexMap;
+use serde::Deserialize;
 use serde_value::Value;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::error::PostError;
 use crate::post::Filter;
+use crate::systemtime_as_secs::as_secs;
 
-use super::cache::CacheGuard;
+use super::cache::{CacheGuard, CacheValue};
 use super::{ApplyFilters, PostManager, PostMetadata, RenderStats, ReturnedPost};
+
+#[derive(Deserialize, Debug)]
+struct BlagMetadata {
+    pub title: String,
+    pub description: String,
+    pub author: String,
+    pub icon: Option<String>,
+    pub icon_alt: Option<String>,
+    pub color: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub modified_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub tags: BTreeSet<String>,
+    pub dont_cache: bool,
+}
+
+impl BlagMetadata {
+    pub fn into_full(self, name: String) -> (PostMetadata, bool) {
+        (
+            PostMetadata {
+                name,
+                title: self.title,
+                description: self.description,
+                author: self.author,
+                icon: self.icon,
+                icon_alt: self.icon_alt,
+                color: self.color,
+                created_at: self.created_at,
+                modified_at: self.modified_at,
+                tags: self.tags.into_iter().collect(),
+            },
+            self.dont_cache,
+        )
+    }
+}
 
 pub struct Blag {
     root: Arc<Path>,
     blag_bin: Arc<Path>,
-    _cache: Option<Arc<CacheGuard>>,
+    cache: Option<Arc<CacheGuard>>,
     _fastblag: bool,
 }
 
 impl Blag {
-    pub fn new(root: Arc<Path>, blag_bin: Arc<Path>, _cache: Option<Arc<CacheGuard>>) -> Blag {
+    pub fn new(root: Arc<Path>, blag_bin: Arc<Path>, cache: Option<Arc<CacheGuard>>) -> Blag {
         Self {
             root,
             blag_bin,
-            _cache,
+            cache,
             _fastblag: false,
         }
+    }
+
+    async fn render(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        query_json: String,
+    ) -> Result<(PostMetadata, String, (Duration, Duration), bool), PostError> {
+        let start = Instant::now();
+
+        debug!(%name, "rendering");
+
+        let mut cmd = tokio::process::Command::new(&*self.blag_bin)
+            .arg(path.as_ref())
+            .env("BLAG_QUERY", query_json)
+            .stdout(Stdio::piped())
+            .spawn()
+            .map_err(|err| {
+                error!("failed to spawn {:?}: {err}", self.blag_bin);
+                err
+            })?;
+
+        let stdout = cmd.stdout.take().unwrap();
+
+        let mut reader = BufReader::new(stdout);
+        let mut buf = String::new();
+        reader.read_line(&mut buf).await?;
+
+        let blag_meta: BlagMetadata = serde_json::from_str(&buf)?;
+        debug!("blag meta: {blag_meta:?}");
+        let (meta, dont_cache) = blag_meta.into_full(name.to_string());
+        let parsed = start.elapsed();
+
+        let rendering = Instant::now();
+        buf.clear();
+        reader.read_to_string(&mut buf).await?;
+
+        debug!("read output: {} bytes", buf.len());
+
+        let exit_status = cmd.wait().await?;
+        debug!("exited: {exit_status}");
+        if !exit_status.success() {
+            return Err(PostError::RenderError(exit_status.to_string()));
+        }
+
+        let rendered = rendering.elapsed();
+
+        Ok((meta, buf, (parsed, rendered), dont_cache))
     }
 }
 
@@ -42,10 +131,10 @@ impl PostManager for Blag {
     async fn get_all_posts(
         &self,
         filters: &[Filter<'_>],
-        query: &HashMap<String, Value>,
+        query: &IndexMap<String, Value>,
     ) -> Result<Vec<(PostMetadata, String, RenderStats)>, PostError> {
         let mut set = FuturesUnordered::new();
-        let mut meow = Vec::new();
+        let mut posts = Vec::new();
         let mut files = tokio::fs::read_dir(&self.root).await?;
 
         loop {
@@ -88,19 +177,20 @@ impl PostManager for Blag {
             };
 
             if post.0.apply_filters(filters) {
-                meow.push(post);
+                posts.push(post);
             }
         }
 
         debug!("collected posts");
 
-        Ok(meow)
+        Ok(posts)
     }
 
+    #[instrument(level = "info", skip(self))]
     async fn get_post(
         &self,
         name: &str,
-        _query: &HashMap<String, Value>,
+        query: &IndexMap<String, Value>,
     ) -> Result<ReturnedPost, PostError> {
         let start = Instant::now();
         let mut path = self.root.join(name);
@@ -137,49 +227,68 @@ impl PostManager for Blag {
             return Err(PostError::NotFound(name.to_string()));
         }
 
-        let mut cmd = tokio::process::Command::new(&*self.blag_bin)
-            .arg(path)
-            .stdout(Stdio::piped())
-            .spawn()
-            .map_err(|err| {
-                error!("failed to spawn {:?}: {err}", self.blag_bin);
-                err
-            })?;
+        let mtime = as_secs(&stat.modified()?);
 
-        let stdout = cmd.stdout.take().unwrap();
+        let query_json = serde_json::to_string(&query).expect("this should not fail");
+        let mut hasher = DefaultHasher::new();
+        query_json.hash(&mut hasher);
+        let query_hash = hasher.finish();
 
-        let mut reader = BufReader::new(stdout);
-        let mut buf = String::new();
-        reader.read_line(&mut buf).await?;
+        let post = if let Some(cache) = &self.cache {
+            if let Some(CacheValue {
+                metadata, rendered, ..
+            }) = cache.lookup(name, mtime, query_hash).await
+            {
+                ReturnedPost::Rendered(metadata, rendered, RenderStats::Cached(start.elapsed()))
+            } else {
+                let (meta, content, (parsed, rendered), dont_cache) =
+                    self.render(name, path, query_json).await?;
 
-        let mut meta: PostMetadata = serde_json::from_str(&buf)?;
-        meta.name = name.to_string();
-        let parsed = start.elapsed();
+                if !dont_cache {
+                    cache
+                        .insert(
+                            name.to_string(),
+                            meta.clone(),
+                            mtime,
+                            content.clone(),
+                            query_hash,
+                        )
+                        .await
+                        .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0));
+                }
 
-        let rendering = Instant::now();
-        buf.clear();
-        reader.read_to_string(&mut buf).await?;
+                let total = start.elapsed();
+                ReturnedPost::Rendered(
+                    meta,
+                    content,
+                    RenderStats::Rendered {
+                        total,
+                        parsed,
+                        rendered,
+                    },
+                )
+            }
+        } else {
+            let (meta, content, (parsed, rendered), ..) =
+                self.render(name, path, query_json).await?;
 
-        debug!("read output: {} bytes", buf.len());
+            let total = start.elapsed();
+            ReturnedPost::Rendered(
+                meta,
+                content,
+                RenderStats::Rendered {
+                    total,
+                    parsed,
+                    rendered,
+                },
+            )
+        };
 
-        let exit_status = cmd.wait().await?;
-        debug!("exited: {exit_status}");
-        if !exit_status.success() {
-            return Err(PostError::RenderError(exit_status.to_string()));
+        if let ReturnedPost::Rendered(.., stats) = &post {
+            info!("rendered blagpost in {:?}", stats);
         }
 
-        let rendered = rendering.elapsed();
-        let total = start.elapsed();
-
-        Ok(ReturnedPost::Rendered(
-            meta,
-            buf,
-            RenderStats::Rendered {
-                parsed,
-                rendered,
-                total,
-            },
-        ))
+        Ok(post)
     }
 
     async fn as_raw(&self, name: &str) -> Result<Option<String>, PostError> {

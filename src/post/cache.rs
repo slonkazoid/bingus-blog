@@ -17,7 +17,7 @@ pub struct CacheValue {
     pub metadata: PostMetadata,
     pub rendered: String,
     pub mtime: u64,
-    extra: u64,
+    pub extra: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

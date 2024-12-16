@@ -10,6 +10,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use handlebars::Handlebars;
 use include_dir::{include_dir, Dir};
+use indexmap::IndexMap;
 use rss::{Category, ChannelBuilder, ItemBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
@@ -80,7 +81,7 @@ struct QueryParams {
     #[serde(rename = "n")]
     num_posts: Option<usize>,
     #[serde(flatten)]
-    other: HashMap<String, Value>,
+    other: IndexMap<String, Value>,
 }
 
 fn collect_tags(posts: &Vec<PostMetadata>) -> Map<String, serde_json::Value> {
