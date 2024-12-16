@@ -96,7 +96,7 @@ fn collect_tags(posts: &Vec<PostMetadata>) -> IndexMap<Arc<str>, u64> {
     }
 
     tags.sort_unstable_by(|k1, _v1, k2, _v2| k1.cmp(k2));
-    tags.sort_by(|_k1, v1, _k2, v2| v1.cmp(v2));
+    tags.sort_by(|_k1, v1, _k2, v2| v2.cmp(v1));
 
     tags
 }
