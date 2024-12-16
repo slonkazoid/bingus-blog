@@ -157,7 +157,7 @@ impl PostManager for Blag {
                 };
 
                 if self.is_raw(&name) {
-                    name.truncate(3);
+                    name.truncate(name.len() - 3);
                     set.push(self.get_post(name.into(), query));
                 }
             }
