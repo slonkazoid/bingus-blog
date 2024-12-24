@@ -168,8 +168,9 @@ impl PostManager for Blag {
                 }
             };
 
-            let file_type = entry.file_type().await?;
-            if file_type.is_file() {
+            let stat = tokio::fs::metadata(entry.path()).await?;
+
+            if stat.file_type().is_file() {
                 let mut name = match entry.file_name().into_string() {
                     Ok(v) => v,
                     Err(_) => {
