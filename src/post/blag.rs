@@ -115,6 +115,7 @@ impl Blag {
         let blag_meta: BlagMetadata = serde_json::from_str(&buf)?;
         debug!("blag meta: {blag_meta:?}");
         let (meta, dont_cache, raw) = blag_meta.into_full(name);
+        buf.clear();
 
         // this is morally reprehensible
         if let Some(raw) = raw {
@@ -124,10 +125,8 @@ impl Blag {
         }
 
         let parsed = start.elapsed();
-
         let rendering = Instant::now();
 
-        buf.clear();
         reader.read_to_string(&mut buf).await?;
 
         let status = cmd.wait().await?;
