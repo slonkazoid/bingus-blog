@@ -3,6 +3,7 @@ use std::sync::Arc;
 use askama_axum::Template;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use color_eyre::eyre;
 use thiserror::Error;
 use tracing::error;
 
@@ -17,6 +18,8 @@ pub enum PostError {
     RenderError(String),
     #[error("post {0:?} not found")]
     NotFound(Arc<str>),
+    #[error("unexpected: {0}")]
+    Other(#[from] eyre::Error),
 }
 
 impl From<fronma::error::Error> for PostError {

@@ -38,10 +38,11 @@ struct BlagMetadata {
     #[serde(default)]
     pub tags: BTreeSet<Arc<str>>,
     pub dont_cache: bool,
+    pub raw: Option<Arc<str>>,
 }
 
 impl BlagMetadata {
-    pub fn into_full(self, name: Arc<str>) -> (PostMetadata, bool) {
+    pub fn into_full(self, name: Arc<str>) -> (PostMetadata, bool, Option<Arc<str>>) {
         (
             PostMetadata {
                 name,
@@ -56,6 +57,7 @@ impl BlagMetadata {
                 tags: self.tags.into_iter().collect(),
             },
             self.dont_cache,
+            self.raw,
         )
     }
 }
@@ -65,6 +67,11 @@ pub struct Blag {
     blag_bin: Arc<Path>,
     cache: Option<Arc<CacheGuard>>,
     _fastblag: bool,
+}
+
+enum RenderResult {
+    Normal(PostMetadata, String, (Duration, Duration), bool),
+    Raw(Vec<u8>, Arc<str>),
 }
 
 impl Blag {
@@ -82,7 +89,7 @@ impl Blag {
         name: Arc<str>,
         path: impl AsRef<Path>,
         query_json: String,
-    ) -> Result<(PostMetadata, String, (Duration, Duration), bool), PostError> {
+    ) -> Result<RenderResult, PostError> {
         let start = Instant::now();
 
         debug!(%name, "rendering");
@@ -91,6 +98,8 @@ impl Blag {
             .arg(path.as_ref())
             .env("BLAG_QUERY", query_json)
             .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::null())
             .spawn()
             .map_err(|err| {
                 error!("failed to spawn {:?}: {err}", self.blag_bin);
@@ -105,24 +114,36 @@ impl Blag {
 
         let blag_meta: BlagMetadata = serde_json::from_str(&buf)?;
         debug!("blag meta: {blag_meta:?}");
-        let (meta, dont_cache) = blag_meta.into_full(name);
+        let (meta, dont_cache, raw) = blag_meta.into_full(name);
+
+        // this is morally reprehensible
+        if let Some(raw) = raw {
+            let mut buf = buf.into_bytes();
+            reader.read_to_end(&mut buf).await?;
+            return Ok(RenderResult::Raw(buf, raw));
+        }
+
         let parsed = start.elapsed();
 
         let rendering = Instant::now();
+
         buf.clear();
         reader.read_to_string(&mut buf).await?;
 
-        debug!("read output: {} bytes", buf.len());
-
-        let exit_status = cmd.wait().await?;
-        debug!("exited: {exit_status}");
-        if !exit_status.success() {
-            return Err(PostError::RenderError(exit_status.to_string()));
+        let status = cmd.wait().await?;
+        debug!("exited: {status}");
+        if !status.success() {
+            return Err(PostError::RenderError(status.to_string()));
         }
 
         let rendered = rendering.elapsed();
 
-        Ok((meta, buf, (parsed, rendered), dont_cache))
+        Ok(RenderResult::Normal(
+            meta,
+            buf,
+            (parsed, rendered),
+            dont_cache,
+        ))
     }
 }
 
@@ -233,46 +254,41 @@ impl PostManager for Blag {
         query_json.hash(&mut hasher);
         let query_hash = hasher.finish();
 
-        let post = if let Some(cache) = &self.cache {
-            if let Some(CacheValue { meta, body, .. }) =
+        let post = if let Some(cache) = &self.cache
+            && let Some(CacheValue { meta, body, .. }) =
                 cache.lookup(name.clone(), mtime, query_hash).await
-            {
-                ReturnedPost::Rendered {
-                    meta,
-                    body,
-                    perf: RenderStats::Cached(start.elapsed()),
-                }
-            } else {
-                let (meta, content, (parsed, rendered), dont_cache) =
-                    self.render(name.clone(), path, query_json).await?;
-                let body = content.into();
-
-                if !dont_cache {
-                    cache
-                        .insert(name, meta.clone(), mtime, Arc::clone(&body), query_hash)
-                        .await
-                        .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0));
-                }
-
-                let total = start.elapsed();
-                ReturnedPost::Rendered {
-                    meta,
-                    body,
-                    perf: RenderStats::Rendered {
-                        total,
-                        parsed,
-                        rendered,
-                    },
-                }
+        {
+            ReturnedPost::Rendered {
+                meta,
+                body,
+                perf: RenderStats::Cached(start.elapsed()),
             }
         } else {
-            let (meta, content, (parsed, rendered), ..) =
-                self.render(name, path, query_json).await?;
+            let (meta, content, (parsed, rendered), dont_cache) =
+                match self.render(name.clone(), path, query_json).await? {
+                    RenderResult::Normal(x, y, z, w) => (x, y, z, w),
+                    RenderResult::Raw(buffer, content_type) => {
+                        return Ok(ReturnedPost::Raw {
+                            buffer,
+                            content_type: HeaderValue::from_str(&content_type)
+                                .map_err(Into::into)
+                                .map_err(PostError::Other)?,
+                        });
+                    }
+                };
+            let body = content.into();
+
+            if !dont_cache && let Some(cache) = &self.cache {
+                cache
+                    .insert(name, meta.clone(), mtime, Arc::clone(&body), query_hash)
+                    .await
+                    .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0));
+            }
 
             let total = start.elapsed();
             ReturnedPost::Rendered {
                 meta,
-                body: content.into(),
+                body,
                 perf: RenderStats::Rendered {
                     total,
                     parsed,
