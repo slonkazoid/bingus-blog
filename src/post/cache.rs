@@ -11,31 +11,37 @@ use tokio::io::AsyncReadExt;
 use tracing::{debug, info, instrument};
 
 /// do not persist cache if this version number changed
-pub const CACHE_VERSION: u16 = 3;
+pub const CACHE_VERSION: u16 = 5;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CacheValue {
     pub meta: PostMetadata,
     pub body: Arc<str>,
     pub mtime: u64,
-    pub extra: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct FileCache(HashMap<Arc<str>, CacheValue>, u16);
+pub struct Cache(HashMap<CacheKey, CacheValue>, u16);
 
-impl Default for FileCache {
+impl Default for Cache {
     fn default() -> Self {
         Self(Default::default(), CACHE_VERSION)
     }
 }
 
-impl FileCache {
-    pub async fn lookup(&self, name: &str, mtime: u64, extra: u64) -> Option<CacheValue> {
-        match self.0.get_async(name).await {
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Debug)]
+#[repr(C)]
+pub struct CacheKey {
+    pub name: Arc<str>,
+    pub extra: u64,
+}
+
+impl Cache {
+    pub async fn lookup(&self, name: Arc<str>, mtime: u64, extra: u64) -> Option<CacheValue> {
+        match self.0.get_async(&CacheKey { name, extra }).await {
             Some(entry) => {
                 let cached = entry.get();
-                if extra == cached.extra && mtime <= cached.mtime {
+                if mtime <= cached.mtime {
                     Some(cached.clone())
                 } else {
                     let _ = entry.remove();
@@ -46,8 +52,13 @@ impl FileCache {
         }
     }
 
-    pub async fn lookup_metadata(&self, name: &str, mtime: u64) -> Option<PostMetadata> {
-        match self.0.get_async(name).await {
+    pub async fn lookup_metadata(
+        &self,
+        name: Arc<str>,
+        mtime: u64,
+        extra: u64,
+    ) -> Option<PostMetadata> {
+        match self.0.get_async(&CacheKey { name, extra }).await {
             Some(entry) => {
                 let cached = entry.get();
                 if mtime <= cached.mtime {
@@ -68,22 +79,23 @@ impl FileCache {
         mtime: u64,
         rendered: Arc<str>,
         extra: u64,
-    ) -> Result<(), (Arc<str>, (PostMetadata, Arc<str>))> {
+    ) -> Result<(), (CacheKey, (PostMetadata, Arc<str>))> {
+        let key = CacheKey { name, extra };
+
         let value = CacheValue {
             meta: metadata,
             body: rendered,
             mtime,
-            extra,
         };
 
         if self
             .0
-            .update_async(&name, |_, _| value.clone())
+            .update_async(&key, |_, _| value.clone())
             .await
             .is_none()
         {
             self.0
-                .insert_async(name, value)
+                .insert_async(key, value)
                 .await
                 .map_err(|x| (x.0, (x.1.meta, x.1.body)))
         } else {
@@ -91,30 +103,36 @@ impl FileCache {
         }
     }
 
-    pub async fn remove(&self, name: &str) -> Option<(Arc<str>, CacheValue)> {
-        self.0.remove_async(name).await
+    #[allow(unused)]
+    pub async fn remove(&self, name: Arc<str>, extra: u64) -> Option<(CacheKey, CacheValue)> {
+        self.0.remove_async(&CacheKey { name, extra }).await
     }
 
     #[instrument(name = "cleanup", skip_all)]
-    pub async fn cleanup(&self, get_mtime: impl Fn(&str) -> Option<u64>) {
+    pub async fn retain(&self, predicate: impl Fn(&CacheKey, &CacheValue) -> bool) {
         let old_size = self.0.len();
         let mut i = 0;
 
         // TODO: multithread
+        // not urgent as this is run concurrently anyways
         self.0
             .retain_async(|k, v| {
-                if get_mtime(k).is_some_and(|mtime| mtime == v.mtime) {
+                if predicate(k, v) {
                     true
                 } else {
-                    debug!("removing {k} from cache");
+                    debug!("removing {k:?} from cache");
                     i += 1;
                     false
                 }
             })
             .await;
 
-        let new_size = self.0.len();
+        let new_size = self.len();
         debug!("removed {i} entries ({old_size} -> {new_size} entries)");
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
     #[inline(always)]
@@ -124,12 +142,12 @@ impl FileCache {
 }
 
 pub struct CacheGuard {
-    inner: FileCache,
+    inner: Cache,
     config: CacheConfig,
 }
 
 impl CacheGuard {
-    pub fn new(cache: FileCache, config: CacheConfig) -> Self {
+    pub fn new(cache: Cache, config: CacheConfig) -> Self {
         Self {
             inner: cache,
             config,
@@ -159,15 +177,15 @@ impl CacheGuard {
 }
 
 impl Deref for CacheGuard {
-    type Target = FileCache;
+    type Target = Cache;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl AsRef<FileCache> for CacheGuard {
-    fn as_ref(&self) -> &FileCache {
+impl AsRef<Cache> for CacheGuard {
+    fn as_ref(&self) -> &Cache {
         &self.inner
     }
 }
@@ -178,7 +196,7 @@ impl Drop for CacheGuard {
     }
 }
 
-pub(crate) async fn load_cache(config: &CacheConfig) -> Result<FileCache, eyre::Report> {
+pub(crate) async fn load_cache(config: &CacheConfig) -> Result<Cache, eyre::Report> {
     let path = &config.file;
     let mut cache_file = tokio::fs::File::open(&path)
         .await

@@ -24,7 +24,7 @@ use crate::config::Config;
 use crate::markdown_render::{build_syntect, render};
 use crate::systemtime_as_secs::as_secs;
 
-use super::cache::{CacheGuard, CacheValue};
+use super::cache::{CacheGuard, CacheKey, CacheValue};
 use super::{
     ApplyFilters, Filter, PostError, PostManager, PostMetadata, RenderStats, ReturnedPost,
 };
@@ -190,7 +190,9 @@ impl PostManager for MarkdownPosts {
                     String::from(path.file_stem().unwrap().to_string_lossy()).into();
 
                 if let Some(cache) = &self.cache
-                    && let Some(hit) = cache.lookup_metadata(&name, mtime).await
+                    && let Some(hit) = cache
+                        .lookup_metadata(name.clone(), mtime, self.render_hash)
+                        .await
                     && hit.apply_filters(filters)
                 {
                     posts.push(hit);
@@ -228,15 +230,12 @@ impl PostManager for MarkdownPosts {
 
             let mut file = match tokio::fs::OpenOptions::new().read(true).open(&path).await {
                 Ok(value) => value,
-                Err(err) => match err.kind() {
-                    io::ErrorKind::NotFound => {
-                        if let Some(cache) = &self.cache {
-                            cache.remove(&name).await;
-                        }
-                        return Err(PostError::NotFound(name));
+                Err(err) => {
+                    return match err.kind() {
+                        io::ErrorKind::NotFound => Err(PostError::NotFound(name)),
+                        _ => Err(PostError::IoError(err)),
                     }
-                    _ => return Err(PostError::IoError(err)),
-                },
+                }
             };
 
             let mut buffer = Vec::with_capacity(4096);
@@ -257,21 +256,18 @@ impl PostManager for MarkdownPosts {
 
             let stat = match tokio::fs::metadata(&path).await {
                 Ok(value) => value,
-                Err(err) => match err.kind() {
-                    io::ErrorKind::NotFound => {
-                        if let Some(cache) = &self.cache {
-                            cache.remove(&name).await;
-                        }
-                        return Err(PostError::NotFound(name));
+                Err(err) => {
+                    return match err.kind() {
+                        io::ErrorKind::NotFound => Err(PostError::NotFound(name)),
+                        _ => Err(PostError::IoError(err)),
                     }
-                    _ => return Err(PostError::IoError(err)),
-                },
+                }
             };
             let mtime = as_secs(&stat.modified()?);
 
             if let Some(cache) = &self.cache
                 && let Some(CacheValue { meta, body, .. }) =
-                    cache.lookup(&name, mtime, self.render_hash).await
+                    cache.lookup(name.clone(), mtime, self.render_hash).await
             {
                 ReturnedPost::Rendered {
                     meta,
@@ -302,8 +298,13 @@ impl PostManager for MarkdownPosts {
     async fn cleanup(&self) {
         if let Some(cache) = &self.cache {
             cache
-                .cleanup(|name| {
-                    std::fs::metadata(
+                .retain(|CacheKey { name, extra }, value| {
+                    // nuke entries with different render options
+                    if self.render_hash != *extra {
+                        return false;
+                    }
+
+                    let mtime = std::fs::metadata(
                         self.config
                             .dirs
                             .posts
@@ -311,7 +312,12 @@ impl PostManager for MarkdownPosts {
                     )
                     .ok()
                     .and_then(|metadata| metadata.modified().ok())
-                    .map(|mtime| as_secs(&mtime))
+                    .map(|mtime| as_secs(&mtime));
+
+                    match mtime {
+                        Some(mtime) => mtime <= value.mtime,
+                        None => false,
+                    }
                 })
                 .await
         }
