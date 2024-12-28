@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -8,7 +9,7 @@ use color_eyre::eyre::{self, Context};
 use scc::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, trace, Span};
 
 /// do not persist cache if this version number changed
 pub const CACHE_VERSION: u16 = 5;
@@ -37,14 +38,20 @@ pub struct CacheKey {
 }
 
 impl Cache {
+    #[instrument(level = "debug", skip(self), fields(entry_mtime))]
     pub async fn lookup(&self, name: Arc<str>, mtime: u64, extra: u64) -> Option<CacheValue> {
+        trace!("looking up in cache");
         match self.0.get_async(&CacheKey { name, extra }).await {
             Some(entry) => {
                 let cached = entry.get();
+                Span::current().record("entry_mtime", cached.mtime);
+                trace!("found in cache");
                 if mtime <= cached.mtime {
+                    trace!("entry up-to-date");
                     Some(cached.clone())
                 } else {
                     let _ = entry.remove();
+                    debug!("removed stale entry");
                     None
                 }
             }
@@ -52,19 +59,24 @@ impl Cache {
         }
     }
 
+    #[instrument(level = "debug", skip(self), fields(entry_mtime))]
     pub async fn lookup_metadata(
         &self,
         name: Arc<str>,
         mtime: u64,
         extra: u64,
     ) -> Option<PostMetadata> {
+        trace!("looking up metadata in cache");
         match self.0.get_async(&CacheKey { name, extra }).await {
             Some(entry) => {
                 let cached = entry.get();
+                Span::current().record("entry_mtime", cached.mtime);
                 if mtime <= cached.mtime {
+                    trace!("entry up-to-date");
                     Some(cached.meta.clone())
                 } else {
                     let _ = entry.remove();
+                    debug!("removed stale entry");
                     None
                 }
             }
@@ -72,6 +84,7 @@ impl Cache {
         }
     }
 
+    #[instrument(level = "debug", skip(self))]
     pub async fn insert(
         &self,
         name: Arc<str>,
@@ -80,7 +93,10 @@ impl Cache {
         rendered: Arc<str>,
         extra: u64,
     ) -> Option<CacheValue> {
-        self.0
+        trace!("inserting into cache");
+
+        let r = self
+            .0
             .upsert_async(
                 CacheKey { name, extra },
                 CacheValue {
@@ -89,15 +105,38 @@ impl Cache {
                     mtime,
                 },
             )
-            .await
+            .await;
+
+        debug!(
+            "{} cache",
+            match r {
+                Some(_) => "updated in",
+                None => "inserted into",
+            }
+        );
+
+        r
     }
 
+    #[instrument(level = "debug", skip(self))]
     #[allow(unused)]
     pub async fn remove(&self, name: Arc<str>, extra: u64) -> Option<(CacheKey, CacheValue)> {
-        self.0.remove_async(&CacheKey { name, extra }).await
+        trace!("removing from cache");
+
+        let r = self.0.remove_async(&CacheKey { name, extra }).await;
+
+        debug!(
+            "item {} cache",
+            match r {
+                Some(_) => "removed from",
+                None => "did not exist in",
+            }
+        );
+
+        r
     }
 
-    #[instrument(name = "cleanup", skip_all)]
+    #[instrument(level = "debug", name = "cleanup", skip_all)]
     pub async fn retain(&self, predicate: impl Fn(&CacheKey, &CacheValue) -> bool) {
         let old_size = self.0.len();
         let mut i = 0;

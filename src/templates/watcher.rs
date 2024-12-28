@@ -105,19 +105,21 @@ pub async fn watch_templates<'a>(
         let mut templates = Vec::new();
 
         for event in events {
-            trace!("file event: {event:?}");
             if let Err(err) = process_event(event, &mut templates).await {
                 error!("error while processing event: {err}");
             }
         }
 
-        let mut reg = reg.write().await;
-        for template in templates.into_iter() {
-            debug!("registered template {}", template.0);
-            reg.register_template(&template.0, template.1);
+        if !templates.is_empty() {
+            let mut reg = reg.write().await;
+            for template in templates.into_iter() {
+                debug!("registered template {}", template.0);
+                reg.register_template(&template.0, template.1);
+            }
+            drop(reg);
+
+            info!("updated custom templates");
         }
-        drop(reg);
-        info!("updated custom templates");
     }
 
     Ok(())

@@ -206,7 +206,7 @@ impl PostManager for Blag {
         Ok(posts)
     }
 
-    #[instrument(level = "info", skip(self))]
+    #[instrument(skip(self))]
     async fn get_post(
         &self,
         name: Arc<str>,
