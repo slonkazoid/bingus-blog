@@ -26,7 +26,11 @@ pub fn build_syntect(config: &RenderConfig) -> eyre::Result<SyntectAdapter> {
     Ok(builder.build())
 }
 
-pub fn render(markdown: &str, syntect: Option<&dyn SyntaxHighlighterAdapter>) -> String {
+pub fn render(
+    markdown: &str,
+    config: &RenderConfig,
+    syntect: Option<&dyn SyntaxHighlighterAdapter>,
+) -> String {
     let mut options = ComrakOptions::default();
     options.extension.table = true;
     options.extension.autolink = true;
@@ -35,6 +39,8 @@ pub fn render(markdown: &str, syntect: Option<&dyn SyntaxHighlighterAdapter>) ->
     options.extension.strikethrough = true;
     options.extension.multiline_block_quotes = true;
     options.extension.header_ids = Some(String::new());
+    options.render.escape = config.escape;
+    options.render.unsafe_ = config.unsafe_;
 
     let mut render_plugins = RenderPlugins::default();
     render_plugins.codefence_syntax_highlighter = syntect;

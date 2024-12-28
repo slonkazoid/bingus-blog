@@ -117,7 +117,7 @@ impl MarkdownPosts {
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let post = render(body, Some(&self.syntect)).into();
+        let post = render(body, &self.config.render, Some(&self.syntect)).into();
         let rendering = before_render.elapsed();
 
         if let Some(cache) = &self.cache {

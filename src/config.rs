@@ -22,6 +22,9 @@ pub struct SyntectConfig {
 #[serde(default)]
 pub struct RenderConfig {
     pub syntect: SyntectConfig,
+    pub escape: bool,
+    #[serde(rename = "unsafe")]
+    pub unsafe_: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

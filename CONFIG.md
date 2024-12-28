@@ -52,9 +52,14 @@ compress = true        # compress the cache file
 compression_level = 3  # zstd compression level, 3 is recommended
 
 [render]
-syntect.load_defaults = false      # include default syntect themes
-syntect.themes_dir = "themes"      # directory to include themes from
-syntect.theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)
+escape = false         # escape HTML in the markdown soucre instead of
+                       # clobbering it (https://docs.rs/comrak/latest/comrak/struct.RenderOptions.html#structfield.escape)
+unsafe = false         # allow HTML and dangerous links (https://docs.rs/comrak/latest/comrak/struct.RenderOptions.html#structfield.unsafe_)
+
+[render.syntect]
+load_defaults = false   # include default syntect themes
+themes_dir = "themes"   # directory to include themes from
+theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)
 
 [blag]
 bin = "blag"           # path to blag binary
