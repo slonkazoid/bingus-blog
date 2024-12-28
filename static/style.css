@@ -28,15 +28,21 @@
 	}
 }
 
-:root,
-code {
+:root {
 	/* please have one at least one good monospace font */
-	font-family: "Hack", "Hack Nerd Font", "JetBrains Mono", "JetBrainsMono Nerd Font", "Ubuntu Mono", monospace, sans-serif;
+	font-family: "Hack", "Hack Nerd Font", "JetBrains Mono", "JetBrainsMono Nerd Font", "Source Code Pro", "Ubuntu Mono", monospace,
+		"Noto Sans", sans-serif;
+}
+
+code {
+	font-family: "Hack", "Hack Nerd Font", "JetBrains Mono", "JetBrainsMono Nerd Font", "Source Code Pro", monospace;
 }
 
 :root {
 	background-color: var(--base);
 	color: var(--text);
+
+	overflow-wrap: break-word;
 }
 
 a {
