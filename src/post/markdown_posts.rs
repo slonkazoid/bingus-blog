@@ -129,9 +129,8 @@ impl MarkdownPosts {
                     Arc::clone(&post),
                     self.render_hash,
                 )
-                .await
-                .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0))
-        };
+                .await;
+        }
 
         Ok((metadata, post, (parsing, rendering)))
     }

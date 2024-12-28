@@ -16,7 +16,7 @@ use serde_value::Value;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::time::Instant;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 
 use crate::error::PostError;
 use crate::post::Filter;
@@ -281,8 +281,7 @@ impl PostManager for Blag {
             if !dont_cache && let Some(cache) = &self.cache {
                 cache
                     .insert(name, meta.clone(), mtime, Arc::clone(&body), query_hash)
-                    .await
-                    .unwrap_or_else(|err| warn!("failed to insert {:?} into cache", err.0));
+                    .await;
             }
 
             let total = start.elapsed();

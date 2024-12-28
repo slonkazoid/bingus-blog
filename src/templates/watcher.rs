@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use handlebars::{Handlebars, Template};
-use notify_debouncer_full::notify::{self, Watcher};
+use notify_debouncer_full::notify::{self};
 use notify_debouncer_full::{new_debouncer, DebouncedEvent};
 use tokio::select;
 use tokio::sync::RwLock;
@@ -85,9 +85,7 @@ pub async fn watch_templates<'a>(
             .expect("failed to send message over channel")
     })?;
 
-    debouncer
-        .watcher()
-        .watch(path, notify::RecursiveMode::NonRecursive)?;
+    debouncer.watch(path, notify::RecursiveMode::NonRecursive)?;
 
     'event_loop: while let Some(events) = select! {
         _ = watcher_token.cancelled() => {

@@ -39,10 +39,7 @@ pub fn render(markdown: &str, syntect: Option<&dyn SyntaxHighlighterAdapter>) ->
     let mut render_plugins = RenderPlugins::default();
     render_plugins.codefence_syntax_highlighter = syntect;
 
-    let plugins = comrak::PluginsBuilder::default()
-        .render(render_plugins)
-        .build()
-        .unwrap();
+    let plugins = comrak::Plugins::builder().render(render_plugins).build();
 
     markdown_to_html_with_plugins(markdown, &options, &plugins)
 }
