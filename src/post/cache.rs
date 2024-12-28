@@ -79,28 +79,17 @@ impl Cache {
         mtime: u64,
         rendered: Arc<str>,
         extra: u64,
-    ) -> Result<(), (CacheKey, (PostMetadata, Arc<str>))> {
-        let key = CacheKey { name, extra };
-
-        let value = CacheValue {
-            meta: metadata,
-            body: rendered,
-            mtime,
-        };
-
-        if self
-            .0
-            .update_async(&key, |_, _| value.clone())
+    ) -> Option<CacheValue> {
+        self.0
+            .upsert_async(
+                CacheKey { name, extra },
+                CacheValue {
+                    meta: metadata,
+                    body: rendered,
+                    mtime,
+                },
+            )
             .await
-            .is_none()
-        {
-            self.0
-                .insert_async(key, value)
-                .await
-                .map_err(|x| (x.0, (x.1.meta, x.1.body)))
-        } else {
-            Ok(())
-        }
     }
 
     #[allow(unused)]
