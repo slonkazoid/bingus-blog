@@ -9,7 +9,7 @@ use axum::async_trait;
 use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
 use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_value::Value;
@@ -179,19 +179,20 @@ impl PostManager for Blag {
 
                 if self.is_raw(&name) {
                     name.truncate(name.len() - 3);
-                    set.push(self.get_post(name.into(), query));
+                    let name = name.into();
+                    set.push(self.get_post(Arc::clone(&name), query).map(|v| (name, v)));
                 }
             }
         }
 
-        while let Some(result) = set.next().await {
+        while let Some((name, result)) = set.next().await {
             let post = match result {
                 Ok(v) => match v {
                     ReturnedPost::Rendered { meta, body, perf } => (meta, body, perf),
                     ReturnedPost::Raw { .. } => unreachable!(),
                 },
                 Err(err) => {
-                    error!("error while rendering blagpost: {err}");
+                    error!("error while rendering blagpost {name:?}: {err}");
                     continue;
                 }
             };
