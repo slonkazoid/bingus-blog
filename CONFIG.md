@@ -37,7 +37,7 @@ custom_templates = "templates" # custom templates dir
 custom_static = "static"       # custom static dir
                        # see CUSTOM.md for documentation
 [http]
-host = "0.0.0.0"       # ip to listen on
+host = "::"            # ip to listen on
 port = 3000            # port to listen on
 
 [cache]
