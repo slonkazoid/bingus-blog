@@ -8,7 +8,7 @@ use notify_debouncer_full::{new_debouncer, DebouncedEvent};
 use tokio::select;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, trace, trace_span};
+use tracing::{debug, debug_span, error, info, trace};
 
 use crate::templates::*;
 
@@ -20,7 +20,7 @@ async fn process_event(
         notify::EventKind::Create(notify::event::CreateKind::File)
         | notify::EventKind::Modify(_) => {
             for path in &event.paths {
-                let span = trace_span!("modify_event", ?path);
+                let span = debug_span!("modify_event", ?path);
                 let _handle = span.enter();
 
                 let template_name = match get_template_name(path) {
@@ -33,13 +33,13 @@ async fn process_event(
 
                 trace!("processing recompilation");
                 let compiled = compile_path_async_io(path).await?;
-                trace!("compiled template {template_name:?}");
+                debug!("compiled template {template_name:?}");
                 templates.push((template_name.to_owned(), compiled));
             }
         }
         notify::EventKind::Remove(notify::event::RemoveKind::File) => {
             for path in &event.paths {
-                let span = trace_span!("remove_event", ?path);
+                let span = debug_span!("remove_event", ?path);
                 let _handle = span.enter();
 
                 let (file_name, template_name) = match path
@@ -60,7 +60,7 @@ async fn process_event(
                 let file = TEMPLATES.get_file(file_name);
                 if let Some(file) = file {
                     let compiled = compile_included_file(file)?;
-                    trace!("compiled template {template_name:?}");
+                    debug!("compiled template {template_name:?}");
                     templates.push((template_name.to_owned(), compiled));
                 }
             }
