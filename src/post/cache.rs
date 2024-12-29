@@ -33,6 +33,7 @@ pub struct CacheValue {
 pub struct Cache {
     map: HashMap<CacheKey, CacheValue>,
     version: u16,
+    #[serde(skip)]
     ttl: Option<NonZeroU64>,
 }
 
@@ -278,5 +279,10 @@ pub(crate) async fn load_cache(config: &CacheConfig) -> Result<Cache, eyre::Repo
         buf
     };
 
-    bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")
+    let mut cache: Cache =
+        bitcode::deserialize(serialized.as_slice()).context("failed to parse cache")?;
+
+    cache.ttl = config.ttl;
+
+    Ok(cache)
 }
