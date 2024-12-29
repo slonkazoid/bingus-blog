@@ -307,7 +307,7 @@ impl PostManager for Blag {
     async fn cleanup(&self) {
         if let Some(cache) = &self.cache {
             cache
-                .retain(|key, value| {
+                .cleanup(|key, value| {
                     let mtime = std::fs::metadata(
                         self.root
                             .join(self.as_raw(&key.name).unwrap_or_else(|| unreachable!())),

@@ -297,7 +297,7 @@ impl PostManager for MarkdownPosts {
     async fn cleanup(&self) {
         if let Some(cache) = &self.cache {
             cache
-                .retain(|CacheKey { name, extra }, value| {
+                .cleanup(|CacheKey { name, extra }, value| {
                     // nuke entries with different render options
                     if self.render_hash != *extra {
                         return false;

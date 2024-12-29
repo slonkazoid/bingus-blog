@@ -56,7 +56,7 @@ impl Cache {
         mtime <= cached.mtime
             && self
                 .ttl
-                .is_some_and(|ttl| cached.cached_at + u64::from(ttl) as u128 >= now())
+                .is_none_or(|ttl| cached.cached_at + u64::from(ttl) as u128 >= now())
     }
 
     #[instrument(level = "debug", skip(self), fields(entry_mtime))]
@@ -158,7 +158,6 @@ impl Cache {
         r
     }
 
-    #[instrument(level = "debug", name = "cleanup", skip_all)]
     pub async fn retain(&self, predicate: impl Fn(&CacheKey, &CacheValue) -> bool) {
         let old_size = self.map.len();
         let mut i = 0;
@@ -179,6 +178,16 @@ impl Cache {
 
         let new_size = self.len();
         debug!("removed {i} entries ({old_size} -> {new_size} entries)");
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    pub async fn cleanup(&self, predicate: impl Fn(&CacheKey, &CacheValue) -> bool) {
+        self.retain(|k, v| {
+            self.ttl
+                .is_none_or(|ttl| v.cached_at + u64::from(ttl) as u128 >= now())
+                && predicate(k, v)
+        })
+        .await
     }
 
     pub fn len(&self) -> usize {
