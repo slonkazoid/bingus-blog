@@ -43,8 +43,12 @@ port = 3000            # port to listen on
 [cache]
 enable = true          # save metadata and rendered posts into RAM
                        # highly recommended, only turn off if absolutely necessary
+#ttl = 5               # how long should and item persist in cache,
+                       # in milliseconds
+                       # uncomment to enable
 cleanup = true         # clean cache, highly recommended
-#cleanup_interval = 86400000 # clean the cache regularly instead of just at startup
+#cleanup_interval = 86400000 # clean the cache regularly instead of
+                       # just at startup, value in milliseconds
                        # uncomment to enable
 persistence = true     # save the cache to on shutdown and load on startup
 file = "cache"         # file to save the cache to

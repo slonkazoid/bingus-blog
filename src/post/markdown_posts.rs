@@ -125,7 +125,7 @@ impl MarkdownPosts {
                 .insert(
                     name.clone(),
                     metadata.clone(),
-                    as_secs(&modified),
+                    as_secs(modified),
                     Arc::clone(&post),
                     self.render_hash,
                 )
@@ -184,7 +184,7 @@ impl PostManager for MarkdownPosts {
             let stat = fs::metadata(&path).await?;
 
             if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
-                let mtime = as_secs(&stat.modified()?);
+                let mtime = as_secs(stat.modified()?);
                 let name: Arc<str> =
                     String::from(path.file_stem().unwrap().to_string_lossy()).into();
 
@@ -262,7 +262,7 @@ impl PostManager for MarkdownPosts {
                     }
                 }
             };
-            let mtime = as_secs(&stat.modified()?);
+            let mtime = as_secs(stat.modified()?);
 
             if let Some(cache) = &self.cache
                 && let Some(CacheValue { meta, body, .. }) =
@@ -311,7 +311,7 @@ impl PostManager for MarkdownPosts {
                     )
                     .ok()
                     .and_then(|metadata| metadata.modified().ok())
-                    .map(|mtime| as_secs(&mtime));
+                    .map(as_secs);
 
                     match mtime {
                         Some(mtime) => mtime <= value.mtime,

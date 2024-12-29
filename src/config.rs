@@ -1,14 +1,15 @@
 use std::env;
 use std::net::{IpAddr, Ipv6Addr};
+use std::num::NonZeroU64;
 use std::path::PathBuf;
 
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{self, bail, Context};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{error, info, instrument};
 use url::Url;
 
-use crate::ranged_i128_visitor::RangedI128Visitor;
+use crate::de::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(default)]
@@ -31,8 +32,11 @@ pub struct RenderConfig {
 #[serde(default)]
 pub struct CacheConfig {
     pub enable: bool,
+    #[serde(deserialize_with = "check_millis")]
+    pub ttl: Option<NonZeroU64>,
     pub cleanup: bool,
-    pub cleanup_interval: Option<u64>,
+    #[serde(deserialize_with = "check_millis")]
+    pub cleanup_interval: Option<NonZeroU64>,
     pub persistence: bool,
     pub file: PathBuf,
     pub compress: bool,
@@ -198,6 +202,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enable: true,
+            ttl: None,
             cleanup: true,
             cleanup_interval: None,
             persistence: true,
@@ -215,7 +220,7 @@ impl Default for BlagConfig {
 }
 
 #[instrument(name = "config")]
-pub async fn load() -> Result<Config> {
+pub async fn load() -> eyre::Result<Config> {
     let config_file = env::var(format!(
         "{}_CONFIG",
         env!("CARGO_BIN_NAME").to_uppercase().replace('-', "_")
@@ -267,6 +272,13 @@ fn check_zstd_level_bounds<'de, D>(d: D) -> Result<i32, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    d.deserialize_i32(RangedI128Visitor::<1, 22>)
+    d.deserialize_i32(RangedI64Visitor::<1, 22>)
         .map(|x| x as i32)
+}
+
+fn check_millis<'de, D>(d: D) -> Result<Option<NonZeroU64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    d.deserialize_option(MillisVisitor)
 }

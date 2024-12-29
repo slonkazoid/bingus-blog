@@ -2,12 +2,12 @@
 
 mod app;
 mod config;
+mod de;
 mod error;
 mod helpers;
 mod markdown_render;
 mod platform;
 mod post;
-mod ranged_i128_visitor;
 mod serve_dir_included;
 mod systemtime_as_secs;
 mod templates;
@@ -32,7 +32,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
 use crate::app::AppState;
-use crate::post::cache::{load_cache, CacheGuard, CACHE_VERSION};
+use crate::post::cache::{load_cache, Cache, CacheGuard, CACHE_VERSION};
 use crate::post::{Blag, MarkdownPosts, PostManager};
 use crate::templates::new_registry;
 use crate::templates::watcher::watch_templates;
@@ -89,17 +89,17 @@ async fn main() -> eyre::Result<()> {
             let mut cache = load_cache(&config.cache).await.unwrap_or_else(|err| {
                 error!("failed to load cache: {}", err);
                 info!("using empty cache");
-                Default::default()
+                Cache::new(config.cache.ttl)
             });
 
             if cache.version() < CACHE_VERSION {
                 warn!("cache version changed, clearing cache");
-                cache = Default::default();
+                cache = Cache::new(config.cache.ttl);
             };
 
             Some(cache)
         } else {
-            Some(Default::default())
+            Some(Cache::new(config.cache.ttl))
         }
     } else {
         None
@@ -122,7 +122,7 @@ async fn main() -> eyre::Result<()> {
             let token = cancellation_token.child_token();
             debug!("setting up cleanup task");
             tasks.spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_millis(millis));
+                let mut interval = tokio::time::interval(Duration::from_millis(millis.into()));
                 loop {
                     select! {
                         _ = token.cancelled() => break Ok(()),

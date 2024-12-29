@@ -248,7 +248,7 @@ impl PostManager for Blag {
             return Err(PostError::NotFound(name));
         }
 
-        let mtime = as_secs(&stat.modified()?);
+        let mtime = as_secs(stat.modified()?);
 
         let query_json = serde_json::to_string(&query).expect("this should not fail");
         let mut hasher = DefaultHasher::new();
@@ -314,7 +314,7 @@ impl PostManager for Blag {
                     )
                     .ok()
                     .and_then(|metadata| metadata.modified().ok())
-                    .map(|mtime| as_secs(&mtime));
+                    .map(as_secs);
 
                     match mtime {
                         Some(mtime) => mtime <= value.mtime,

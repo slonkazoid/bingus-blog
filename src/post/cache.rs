@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 use std::io::{Read, Write};
+use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use crate::config::CacheConfig;
 use crate::post::PostMetadata;
@@ -14,20 +16,24 @@ use tracing::{debug, info, instrument, trace, Span};
 /// do not persist cache if this version number changed
 pub const CACHE_VERSION: u16 = 5;
 
+fn now() -> u128 {
+    crate::systemtime_as_secs::as_millis(SystemTime::now())
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CacheValue {
     pub meta: PostMetadata,
     pub body: Arc<str>,
     pub mtime: u64,
+    /// when the item was inserted into cache, in milliseconds since epoch
+    pub cached_at: u128,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Cache(HashMap<CacheKey, CacheValue>, u16);
-
-impl Default for Cache {
-    fn default() -> Self {
-        Self(Default::default(), CACHE_VERSION)
-    }
+pub struct Cache {
+    map: HashMap<CacheKey, CacheValue>,
+    version: u16,
+    ttl: Option<NonZeroU64>,
 }
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Debug)]
@@ -38,15 +44,30 @@ pub struct CacheKey {
 }
 
 impl Cache {
+    pub fn new(ttl: Option<NonZeroU64>) -> Self {
+        Cache {
+            map: Default::default(),
+            version: CACHE_VERSION,
+            ttl,
+        }
+    }
+
+    fn up_to_date(&self, cached: &CacheValue, mtime: u64) -> bool {
+        mtime <= cached.mtime
+            && self
+                .ttl
+                .is_some_and(|ttl| cached.cached_at + u64::from(ttl) as u128 >= now())
+    }
+
     #[instrument(level = "debug", skip(self), fields(entry_mtime))]
     pub async fn lookup(&self, name: Arc<str>, mtime: u64, extra: u64) -> Option<CacheValue> {
         trace!("looking up in cache");
-        match self.0.get_async(&CacheKey { name, extra }).await {
+        match self.map.get_async(&CacheKey { name, extra }).await {
             Some(entry) => {
                 let cached = entry.get();
                 Span::current().record("entry_mtime", cached.mtime);
                 trace!("found in cache");
-                if mtime <= cached.mtime {
+                if self.up_to_date(cached, mtime) {
                     trace!("entry up-to-date");
                     Some(cached.clone())
                 } else {
@@ -67,11 +88,11 @@ impl Cache {
         extra: u64,
     ) -> Option<PostMetadata> {
         trace!("looking up metadata in cache");
-        match self.0.get_async(&CacheKey { name, extra }).await {
+        match self.map.get_async(&CacheKey { name, extra }).await {
             Some(entry) => {
                 let cached = entry.get();
                 Span::current().record("entry_mtime", cached.mtime);
-                if mtime <= cached.mtime {
+                if self.up_to_date(cached, mtime) {
                     trace!("entry up-to-date");
                     Some(cached.meta.clone())
                 } else {
@@ -96,13 +117,14 @@ impl Cache {
         trace!("inserting into cache");
 
         let r = self
-            .0
+            .map
             .upsert_async(
                 CacheKey { name, extra },
                 CacheValue {
                     meta: metadata,
                     body: rendered,
                     mtime,
+                    cached_at: now(),
                 },
             )
             .await;
@@ -123,7 +145,7 @@ impl Cache {
     pub async fn remove(&self, name: Arc<str>, extra: u64) -> Option<(CacheKey, CacheValue)> {
         trace!("removing from cache");
 
-        let r = self.0.remove_async(&CacheKey { name, extra }).await;
+        let r = self.map.remove_async(&CacheKey { name, extra }).await;
 
         debug!(
             "item {} cache",
@@ -138,12 +160,12 @@ impl Cache {
 
     #[instrument(level = "debug", name = "cleanup", skip_all)]
     pub async fn retain(&self, predicate: impl Fn(&CacheKey, &CacheValue) -> bool) {
-        let old_size = self.0.len();
+        let old_size = self.map.len();
         let mut i = 0;
 
         // TODO: multithread
         // not urgent as this is run concurrently anyways
-        self.0
+        self.map
             .retain_async(|k, v| {
                 if predicate(k, v) {
                     true
@@ -160,12 +182,12 @@ impl Cache {
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.map.len()
     }
 
     #[inline(always)]
     pub fn version(&self) -> u16 {
-        self.1
+        self.version
     }
 }
 
