@@ -1,7 +1,7 @@
 <div class="table">
-	{{#if (and (ne this.created_at null) style.display_dates.creation)}}
+	{{#if (and (ne this.written_at null) style.display_dates.creation)}}
 		<div class="created">written</div>
-		<div class="created value">{{>span_date dt=this.created_at df=style.date_format}}</div>
+		<div class="created value">{{>span_date dt=this.written_at df=style.date_format}}</div>
 	{{/if}}
 	{{#if (and (ne this.modified_at null) style.display_dates.modification)}}
 		<div class="modified">last modified</div>
