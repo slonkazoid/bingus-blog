@@ -26,7 +26,7 @@ pub struct PostMetadata {
     pub icon: Option<Arc<str>>,
     pub icon_alt: Option<Arc<str>>,
     pub color: Option<Arc<str>>,
-    pub created_at: Option<DateTime<Utc>>,
+    pub written_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     pub tags: Vec<Arc<str>>,
 }
@@ -121,7 +121,7 @@ pub trait PostManager {
             .await?;
         // we still want some semblance of order if created_at is None so sort by mtime as well
         posts.sort_unstable_by_key(|metadata| metadata.modified_at.unwrap_or_default());
-        posts.sort_by_key(|metadata| metadata.created_at.unwrap_or_default());
+        posts.sort_by_key(|metadata| metadata.written_at.unwrap_or_default());
         posts.reverse();
         if let Some(n) = n {
             posts.truncate(n);

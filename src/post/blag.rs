@@ -33,7 +33,8 @@ struct BlagMetadata {
     pub icon: Option<Arc<str>>,
     pub icon_alt: Option<Arc<str>>,
     pub color: Option<Arc<str>>,
-    pub created_at: Option<DateTime<Utc>>,
+    #[serde(alias = "created_at")]
+    pub written_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub tags: BTreeSet<Arc<str>>,
@@ -52,7 +53,7 @@ impl BlagMetadata {
                 icon: self.icon,
                 icon_alt: self.icon_alt,
                 color: self.color,
-                created_at: self.created_at,
+                written_at: self.written_at,
                 modified_at: self.modified_at,
                 tags: self.tags.into_iter().collect(),
             },

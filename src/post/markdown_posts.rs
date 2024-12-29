@@ -37,7 +37,8 @@ struct FrontMatter {
     pub icon: Option<Arc<str>>,
     pub icon_alt: Option<Arc<str>>,
     pub color: Option<Arc<str>>,
-    pub created_at: Option<DateTime<Utc>>,
+    #[serde(alias = "created_at")]
+    pub written_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub tags: BTreeSet<Arc<str>>,
@@ -58,7 +59,7 @@ impl FrontMatter {
             icon: self.icon,
             icon_alt: self.icon_alt,
             color: self.color,
-            created_at: self.created_at.or_else(|| created.map(|t| t.into())),
+            written_at: self.written_at.or_else(|| created.map(|t| t.into())),
             modified_at: self.modified_at.or_else(|| modified.map(|t| t.into())),
             tags: self.tags.into_iter().collect(),
         }

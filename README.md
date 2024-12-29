@@ -2,7 +2,7 @@
 title: README
 description: the README.md file of this project
 author: slonkazoid
-created_at: 2024-04-18T04:15:26+03:00
+written_at: 2024-04-18T04:15:26+03:00
 ---
 
 # bingus-blog
@@ -83,7 +83,7 @@ author: Blubber256 # author of the post
 icon: /media/first-post/icon.png # icon/thumbnail of post used in embeds
 icon_alt: Picture of a computer running DOOM
 color: "#00aacc" # color of post, also used in embeds
-created_at: 2024-04-18T04:15:26+03:00 # date of writing, this is highly
+written_at: 2024-04-18T04:15:26+03:00 # date of writing, this is highly
 # recommended if you are on a system which doesnt have btime (like musl),
 # because this is fetched from file stats by default
 #modified_at: ... # see above. this is also fetched from the filesystem
@@ -94,7 +94,7 @@ tags: # tags, or keywords, used in meta and also in the ui
 
 only first 3 fields are required. if it can't find the other 2 fields, it will
 get them from filesystem metadata. if you are on musl and you omit the
-`created_at` field, it will just not show up
+`written_at` field, it will just not show up
 
 the dates must follow the [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
 standard. examples of valid and invalid dates:

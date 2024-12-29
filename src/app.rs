@@ -210,7 +210,7 @@ async fn rss(
                         })
                         .collect::<Vec<Category>>(),
                 )
-                .pub_date(metadata.created_at.map(|date| date.to_rfc2822()))
+                .pub_date(metadata.written_at.map(|date| date.to_rfc2822()))
                 .content(content.to_string())
                 .link(
                     config
