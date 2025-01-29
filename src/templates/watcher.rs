@@ -8,7 +8,7 @@ use notify_debouncer_full::{new_debouncer, DebouncedEvent};
 use tokio::select;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, debug_span, error, info, trace};
+use tracing::{debug, debug_span, error, info, instrument, trace};
 
 use crate::templates::*;
 
@@ -71,11 +71,12 @@ async fn process_event(
     Ok(())
 }
 
+#[instrument(skip_all)]
 pub async fn watch_templates<'a>(
     path: impl AsRef<Path>,
     watcher_token: CancellationToken,
     reg: Arc<RwLock<Handlebars<'a>>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+) -> Result<(), color_eyre::eyre::Report> {
     let path = path.as_ref();
 
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);

@@ -3,17 +3,36 @@
 the configuration format, with defaults, is documented below:
 
 ```toml
-title = "bingus-blog"  # title of the blog
-# description of the blog
-description = "blazingly fast blog software written in rust memory safe"
-raw_access = true      # allow users to see the raw source of a post
-js_enable = true       # enable javascript (required for sorting and dates)
-engine = "markdown"    # choose which post engine to use
+[engine]
+mode = "markdown"      # choose which post engine to use
                        # options: "markdown", "blag"
                        # absolutely do not use "blag" unless you know exactly
                        # what you are getting yourself into.
 
+[engine.markdown]      # options for the `markdown` engine
+root = "posts"         # where posts are served from
+raw_access = true      # allow visitors to see the raw markdown of a post
+
+[engine.markdown.render]
+escape = false         # escape HTML in the markdown soucre instead of
+                       # clobbering it (https://docs.rs/comrak/latest/comrak/struct.RenderOptions.html#structfield.escape)
+unsafe = false         # allow HTML and dangerous links (https://docs.rs/comrak/latest/comrak/struct.RenderOptions.html#structfield.unsafe_)
+
+[engine.markdown.render.syntect]
+load_defaults = false   # include default syntect themes
+themes_dir = "themes"   # directory to include themes from
+theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)
+
+[engine.blag]
+root = "posts"         # where posts are served from
+bin = "blag"           # path to the `blag` binary
+raw_access = true      # allow visitors to see the raw bash of a post
+
 [style]
+title = "bingus-blog"  # title of the blog
+# description of the blog
+description = "blazingly fast blog software written in rust memory safe"
+js_enable = true       # enable javascript (required for sorting and dates)
 date_format = "RFC3339" # format string used to format dates in the backend
                        # it's highly recommended to leave this as default,
                        # so the date can be formatted by the browser.
@@ -31,7 +50,6 @@ enable = false         # serve an rss field under /feed.xml
 link = "https://..."   # public url of the blog, required if rss is enabled
 
 [dirs]
-posts = "posts"        # where posts are stored
 media = "media"        # directory served under /media/
 custom_templates = "templates" # custom templates dir
 custom_static = "static"       # custom static dir
@@ -54,19 +72,6 @@ persistence = true     # save the cache to on shutdown and load on startup
 file = "cache"         # file to save the cache to
 compress = true        # compress the cache file
 compression_level = 3  # zstd compression level, 3 is recommended
-
-[render]
-escape = false         # escape HTML in the markdown soucre instead of
-                       # clobbering it (https://docs.rs/comrak/latest/comrak/struct.RenderOptions.html#structfield.escape)
-unsafe = false         # allow HTML and dangerous links (https://docs.rs/comrak/latest/comrak/struct.RenderOptions.html#structfield.unsafe_)
-
-[render.syntect]
-load_defaults = false   # include default syntect themes
-themes_dir = "themes"   # directory to include themes from
-theme = "Catppuccin Mocha" # theme file name (without `.tmTheme`)
-
-[blag]
-bin = "blag"           # path to blag binary
 ```
 
 configuration is done in [TOML](https://toml.io/)  

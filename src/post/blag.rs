@@ -5,6 +5,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arc_swap::access::Access;
 use axum::async_trait;
 use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
@@ -18,6 +19,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument};
 
+use crate::config::BlagConfig;
 use crate::error::PostError;
 use crate::post::Filter;
 use crate::systemtime_as_secs::as_secs;
@@ -63,9 +65,8 @@ impl BlagMetadata {
     }
 }
 
-pub struct Blag {
-    root: Arc<Path>,
-    blag_bin: Arc<Path>,
+pub struct Blag<A> {
+    config: A,
     cache: Option<Arc<CacheGuard>>,
     _fastblag: bool,
 }
@@ -75,11 +76,15 @@ enum RenderResult {
     Raw(Vec<u8>, Arc<str>),
 }
 
-impl Blag {
-    pub fn new(root: Arc<Path>, blag_bin: Arc<Path>, cache: Option<Arc<CacheGuard>>) -> Blag {
+impl<A> Blag<A>
+where
+    A: Access<BlagConfig>,
+    A: Sync,
+    A::Guard: Send,
+{
+    pub fn new(config: A, cache: Option<Arc<CacheGuard>>) -> Self {
         Self {
-            root,
-            blag_bin,
+            config,
             cache,
             _fastblag: false,
         }
@@ -92,10 +97,11 @@ impl Blag {
         query_json: String,
     ) -> Result<RenderResult, PostError> {
         let start = Instant::now();
+        let bin = self.config.load().bin.clone();
 
         debug!(%name, "rendering");
 
-        let mut cmd = tokio::process::Command::new(&*self.blag_bin)
+        let mut cmd = tokio::process::Command::new(&*bin)
             .arg(path.as_ref())
             .env("BLAG_QUERY", query_json)
             .stdout(Stdio::piped())
@@ -103,7 +109,7 @@ impl Blag {
             .stdin(Stdio::null())
             .spawn()
             .map_err(|err| {
-                error!("failed to spawn {:?}: {err}", self.blag_bin);
+                error!("failed to spawn {bin:?}: {err}");
                 err
             })?;
 
@@ -145,18 +151,37 @@ impl Blag {
             dont_cache,
         ))
     }
+
+    fn as_raw(name: &str) -> String {
+        let mut buf = String::with_capacity(name.len() + 3);
+        buf += name;
+        buf += ".sh";
+
+        buf
+    }
+
+    fn is_raw(name: &str) -> bool {
+        name.ends_with(".sh")
+    }
 }
 
 #[async_trait]
-impl PostManager for Blag {
+impl<A> PostManager for Blag<A>
+where
+    A: Access<BlagConfig>,
+    A: Sync,
+    A::Guard: Send,
+{
     async fn get_all_posts(
         &self,
         filters: &[Filter<'_>],
         query: &IndexMap<String, Value>,
     ) -> Result<Vec<(PostMetadata, Arc<str>, RenderStats)>, PostError> {
+        let root = &self.config.load().root;
+
         let mut set = FuturesUnordered::new();
         let mut posts = Vec::new();
-        let mut files = tokio::fs::read_dir(&self.root).await?;
+        let mut files = tokio::fs::read_dir(&root).await?;
 
         loop {
             let entry = match files.next_entry().await {
@@ -178,7 +203,7 @@ impl PostManager for Blag {
                     }
                 };
 
-                if self.is_raw(&name) {
+                if Self::is_raw(&name) {
                     name.truncate(name.len() - 3);
                     let name = name.into();
                     set.push(self.get_post(Arc::clone(&name), query).map(|v| (name, v)));
@@ -188,18 +213,19 @@ impl PostManager for Blag {
 
         while let Some((name, result)) = set.next().await {
             let post = match result {
-                Ok(v) => match v {
-                    ReturnedPost::Rendered { meta, body, perf } => (meta, body, perf),
-                    ReturnedPost::Raw { .. } => unreachable!(),
-                },
+                Ok(v) => v,
                 Err(err) => {
                     error!("error while rendering blagpost {name:?}: {err}");
                     continue;
                 }
             };
 
-            if post.0.apply_filters(filters) {
-                posts.push(post);
+            if let ReturnedPost::Rendered {
+                meta, body, perf, ..
+            } = post
+                && meta.apply_filters(filters)
+            {
+                posts.push((meta, body, perf));
             }
         }
 
@@ -215,28 +241,33 @@ impl PostManager for Blag {
         query: &IndexMap<String, Value>,
     ) -> Result<ReturnedPost, PostError> {
         let start = Instant::now();
-        let mut path = self.root.join(&*name);
+        let BlagConfig {
+            ref root,
+            ref raw_access,
+            ..
+        } = &*self.config.load();
 
-        if self.is_raw(&name) {
+        if Self::is_raw(&name) {
             let mut buffer = Vec::new();
-            let mut file =
-                OpenOptions::new()
-                    .read(true)
-                    .open(&path)
-                    .await
-                    .map_err(|err| match err.kind() {
-                        std::io::ErrorKind::NotFound => PostError::NotFound(name),
-                        _ => PostError::IoError(err),
-                    })?;
+            let mut file = OpenOptions::new()
+                .read(true)
+                .open(root.join(&*name))
+                .await
+                .map_err(|err| match err.kind() {
+                    std::io::ErrorKind::NotFound => PostError::NotFound(name),
+                    _ => PostError::IoError(err),
+                })?;
             file.read_to_end(&mut buffer).await?;
 
             return Ok(ReturnedPost::Raw {
                 buffer,
                 content_type: HeaderValue::from_static("text/x-shellscript"),
             });
-        } else {
-            path.add_extension("sh");
         }
+
+        let raw_name = Self::as_raw(&name);
+        let path = root.join(&raw_name);
+        let raw_name = raw_access.then_some(raw_name);
 
         let stat = tokio::fs::metadata(&path)
             .await
@@ -264,6 +295,7 @@ impl PostManager for Blag {
                 meta,
                 body,
                 perf: RenderStats::Cached(start.elapsed()),
+                raw_name,
             }
         } else {
             let (meta, content, (parsed, rendered), dont_cache) =
@@ -295,6 +327,7 @@ impl PostManager for Blag {
                     parsed,
                     rendered,
                 },
+                raw_name,
             }
         };
 
@@ -307,15 +340,13 @@ impl PostManager for Blag {
 
     async fn cleanup(&self) {
         if let Some(cache) = &self.cache {
+            let root = &self.config.load().root;
             cache
                 .cleanup(|key, value| {
-                    let mtime = std::fs::metadata(
-                        self.root
-                            .join(self.as_raw(&key.name).unwrap_or_else(|| unreachable!())),
-                    )
-                    .ok()
-                    .and_then(|metadata| metadata.modified().ok())
-                    .map(as_secs);
+                    let mtime = std::fs::metadata(root.join(Self::as_raw(&key.name)))
+                        .ok()
+                        .and_then(|metadata| metadata.modified().ok())
+                        .map(as_secs);
 
                     match mtime {
                         Some(mtime) => mtime <= value.mtime,
@@ -324,17 +355,5 @@ impl PostManager for Blag {
                 })
                 .await
         }
-    }
-
-    fn is_raw(&self, name: &str) -> bool {
-        name.ends_with(".sh")
-    }
-
-    fn as_raw(&self, name: &str) -> Option<String> {
-        let mut buf = String::with_capacity(name.len() + 3);
-        buf += name;
-        buf += ".sh";
-
-        Some(buf)
     }
 }

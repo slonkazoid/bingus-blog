@@ -1,34 +1,34 @@
+use std::borrow::Cow;
 use std::env;
 use std::net::{IpAddr, Ipv6Addr};
 use std::num::NonZeroU64;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use color_eyre::eyre::{self, bail, Context};
+use const_str::{concat, convert_ascii_case};
+use notify_debouncer_full::notify::RecursiveMode;
+use notify_debouncer_full::{new_debouncer, DebouncedEvent};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{error, info, instrument};
+use tokio::select;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, instrument, trace};
 use url::Url;
 
 use crate::de::*;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
 #[serde(default)]
 pub struct SyntectConfig {
     pub load_defaults: bool,
-    pub themes_dir: Option<PathBuf>,
-    pub theme: Option<String>,
+    pub themes_dir: Option<Box<Path>>,
+    pub theme: Option<Box<str>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
-#[serde(default)]
-pub struct RenderConfig {
-    pub syntect: SyntectConfig,
-    pub escape: bool,
-    #[serde(rename = "unsafe")]
-    pub unsafe_: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct CacheConfig {
     pub enable: bool,
@@ -38,43 +38,43 @@ pub struct CacheConfig {
     #[serde(deserialize_with = "check_millis")]
     pub cleanup_interval: Option<NonZeroU64>,
     pub persistence: bool,
-    pub file: PathBuf,
+    pub file: Box<Path>,
     pub compress: bool,
     #[serde(deserialize_with = "check_zstd_level_bounds")]
     pub compression_level: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct HttpConfig {
     pub host: IpAddr,
     pub port: u16,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct DirsConfig {
-    pub posts: PathBuf,
-    pub media: PathBuf,
-    pub custom_static: PathBuf,
-    pub custom_templates: PathBuf,
+    pub media: Box<Path>,
+    #[serde(rename = "static")]
+    pub static_: Box<Path>,
+    pub templates: Box<Path>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RssConfig {
     pub enable: bool,
     pub link: Url,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub enum DateFormat {
     #[default]
     RFC3339,
     #[serde(untagged)]
-    Strftime(String),
+    Strftime(Box<str>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 #[repr(u8)]
 pub enum Sort {
@@ -83,61 +83,104 @@ pub enum Sort {
     Name,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-#[derive(Default)]
 pub struct StyleConfig {
+    pub title: Box<str>,
+    pub description: Box<str>,
+    pub js_enable: bool,
     pub display_dates: DisplayDates,
     pub date_format: DateFormat,
     pub default_sort: Sort,
-    pub default_color: Option<String>,
+    pub default_color: Option<Box<str>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl Default for StyleConfig {
+    fn default() -> Self {
+        Self {
+            title: "bingus-blog".into(),
+            description: "blazingly fast markdown blog software written in rust memory safe".into(),
+            js_enable: true,
+            display_dates: Default::default(),
+            date_format: Default::default(),
+            default_sort: Default::default(),
+            default_color: Default::default(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(default)]
 pub struct DisplayDates {
     pub creation: bool,
     pub modification: bool,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Default)]
+#[serde(default)]
+pub struct MarkdownRenderConfig {
+    pub syntect: SyntectConfig,
+    pub escape: bool,
+    #[serde(rename = "unsafe")]
+    pub unsafe_: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MarkdownConfig {
+    pub root: Box<Path>,
+    pub render: MarkdownRenderConfig,
+    pub raw_access: bool,
+}
+
+impl Default for MarkdownConfig {
+    fn default() -> Self {
+        Self {
+            root: PathBuf::from("posts").into(),
+            render: Default::default(),
+            raw_access: true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct BlagConfig {
+    pub root: Box<Path>,
+    pub bin: Box<Path>,
+    pub raw_access: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
 #[serde(rename_all = "lowercase")]
-pub enum Engine {
+pub enum EngineMode {
     #[default]
     Markdown,
     Blag,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(default)]
-pub struct BlagConfig {
-    pub bin: PathBuf,
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default, rename_all = "lowercase")]
+pub struct Engine {
+    pub mode: EngineMode,
+    pub markdown: MarkdownConfig,
+    pub blag: BlagConfig,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct Config {
-    pub title: String,
-    pub description: String,
-    pub markdown_access: bool,
-    pub js_enable: bool,
     pub engine: Engine,
     pub style: StyleConfig,
     pub rss: RssConfig,
+    #[serde(rename = "custom")]
     pub dirs: DirsConfig,
     pub http: HttpConfig,
-    pub render: RenderConfig,
     pub cache: CacheConfig,
-    pub blag: BlagConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            title: "bingus-blog".into(),
-            description: "blazingly fast markdown blog software written in rust memory safe".into(),
-            markdown_access: true,
-            js_enable: true,
             engine: Default::default(),
             style: Default::default(),
             // i have a love-hate relationship with serde
@@ -152,9 +195,7 @@ impl Default for Config {
             },
             dirs: Default::default(),
             http: Default::default(),
-            render: Default::default(),
             cache: Default::default(),
-            blag: Default::default(),
         }
     }
 }
@@ -171,10 +212,9 @@ impl Default for DisplayDates {
 impl Default for DirsConfig {
     fn default() -> Self {
         Self {
-            posts: "posts".into(),
-            media: "media".into(),
-            custom_static: "static".into(),
-            custom_templates: "templates".into(),
+            media: PathBuf::from("media").into_boxed_path(),
+            static_: PathBuf::from("static").into_boxed_path(),
+            templates: PathBuf::from("templates").into_boxed_path(),
         }
     }
 }
@@ -192,7 +232,7 @@ impl Default for SyntectConfig {
     fn default() -> Self {
         Self {
             load_defaults: false,
-            themes_dir: Some("themes".into()),
+            themes_dir: Some(PathBuf::from("themes").into_boxed_path()),
             theme: Some("Catppuccin Mocha".into()),
         }
     }
@@ -206,7 +246,7 @@ impl Default for CacheConfig {
             cleanup: true,
             cleanup_interval: None,
             persistence: true,
-            file: "cache".into(),
+            file: PathBuf::from("cache").into(),
             compress: true,
             compression_level: 3,
         }
@@ -215,22 +255,25 @@ impl Default for CacheConfig {
 
 impl Default for BlagConfig {
     fn default() -> Self {
-        Self { bin: "blag".into() }
+        Self {
+            root: PathBuf::from("posts").into(),
+            bin: PathBuf::from("blag").into(),
+            raw_access: true,
+        }
     }
 }
 
-#[instrument(name = "config")]
-pub async fn load() -> eyre::Result<Config> {
-    let config_file = env::var(format!(
-        "{}_CONFIG",
-        env!("CARGO_BIN_NAME").to_uppercase().replace('-', "_")
+fn config_path() -> Cow<'static, str> {
+    env::var(concat!(
+        convert_ascii_case!(upper_camel, env!("CARGO_BIN_NAME")),
+        "_CONFIG"
     ))
-    .unwrap_or_else(|_| String::from("config.toml"));
-    match tokio::fs::OpenOptions::new()
-        .read(true)
-        .open(&config_file)
-        .await
-    {
+    .map(Into::into)
+    .unwrap_or("config.toml".into())
+}
+
+pub async fn load_from(path: (impl AsRef<Path> + std::fmt::Debug)) -> eyre::Result<Config> {
+    match tokio::fs::OpenOptions::new().read(true).open(&path).await {
         Ok(mut file) => {
             let mut buf = String::new();
             file.read_to_string(&mut buf)
@@ -246,7 +289,7 @@ pub async fn load() -> eyre::Result<Config> {
                     .write(true)
                     .create(true)
                     .truncate(true)
-                    .open(&config_file)
+                    .open(&path)
                     .await
                 {
                     Ok(mut file) => file
@@ -256,16 +299,91 @@ pub async fn load() -> eyre::Result<Config> {
                                 .as_bytes(),
                         )
                         .await
-                        .unwrap_or_else(|err| error!("couldn't write configuration: {}", err)),
-                    Err(err) => {
-                        error!("couldn't open file {:?} for writing: {}", &config_file, err)
-                    }
+                        .unwrap_or_else(|err| error!("couldn't write configuration: {err}")),
+                    Err(err) => error!("couldn't open file {path:?} for writing: {err}"),
                 }
                 Ok(config)
             }
-            _ => bail!("couldn't open config file: {}", err),
+            _ => bail!("couldn't open config file: {err}"),
         },
     }
+}
+
+#[instrument]
+pub async fn load() -> eyre::Result<(Config, Cow<'static, str>)> {
+    let config_file = config_path();
+    let config = load_from(&*config_file).await?;
+    Ok((config, config_file))
+}
+
+async fn process_event(
+    event: DebouncedEvent,
+    config_file: &Path,
+    swapper: &ArcSwap<Config>,
+) -> eyre::Result<()> {
+    if !event.kind.is_modify() && !event.kind.is_create()
+        || !event.paths.iter().any(|p| p == config_file)
+    {
+        trace!("not interested: {event:?}");
+        return Ok(());
+    }
+
+    let config = load_from(config_file).await?;
+    info!("reloaded config from {config_file:?}");
+
+    swapper.store(Arc::new(config));
+
+    Ok(())
+}
+
+#[instrument(skip_all)]
+pub async fn watcher(
+    config_file: impl AsRef<str>,
+    watcher_token: CancellationToken,
+    swapper: Arc<ArcSwap<Config>>,
+) -> eyre::Result<()> {
+    let config_file = tokio::fs::canonicalize(config_file.as_ref())
+        .await
+        .context("failed to canonicalize path")?;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+
+    let mut debouncer = new_debouncer(Duration::from_millis(100), None, move |events| {
+        tx.blocking_send(events)
+            .expect("failed to send message over channel")
+    })?;
+
+    let dir = config_file
+        .as_path()
+        .parent()
+        .expect("absolute path to have parent");
+    debouncer
+        .watch(&dir, RecursiveMode::NonRecursive)
+        .with_context(|| format!("failed to watch {dir:?}"))?;
+
+    'event_loop: while let Some(ev) = select! {
+        _ = watcher_token.cancelled() => {
+            info!("2");
+            break 'event_loop;
+        },
+        ev = rx.recv() => ev,
+    } {
+        let events = match ev {
+            Ok(events) => events,
+            Err(err) => {
+                error!("error getting events: {err:?}");
+                continue;
+            }
+        };
+
+        for event in events {
+            if let Err(err) = process_event(event, &config_file, &swapper).await {
+                error!("error while processing event: {err}");
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn check_zstd_level_bounds<'de, D>(d: D) -> Result<i32, D::Error>

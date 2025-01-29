@@ -7,6 +7,7 @@ use std::time::SystemTime;
 
 use crate::config::CacheConfig;
 use crate::post::PostMetadata;
+use arc_swap::access::DynAccess;
 use color_eyre::eyre::{self, Context};
 use scc::HashMap;
 use serde::{Deserialize, Serialize};
@@ -201,13 +202,15 @@ impl Cache {
     }
 }
 
+pub type ConfigAccess = Box<dyn DynAccess<CacheConfig> + Send + Sync>;
+
 pub struct CacheGuard {
     inner: Cache,
-    config: CacheConfig,
+    config: ConfigAccess,
 }
 
 impl CacheGuard {
-    pub fn new(cache: Cache, config: CacheConfig) -> Self {
+    pub fn new(cache: Cache, config: ConfigAccess) -> Self {
         Self {
             inner: cache,
             config,
@@ -215,13 +218,14 @@ impl CacheGuard {
     }
 
     fn try_drop(&mut self) -> Result<(), eyre::Report> {
+        let config = self.config.load();
         // write cache to file
-        let path = &self.config.file;
+        let path = &*config.file;
         let serialized = bitcode::serialize(&self.inner).context("failed to serialize cache")?;
         let mut cache_file = std::fs::File::create(path)
             .with_context(|| format!("failed to open cache at {}", path.display()))?;
-        let compression_level = self.config.compression_level;
-        if self.config.compress {
+        let compression_level = config.compression_level;
+        if config.compress {
             std::io::Write::write_all(
                 &mut zstd::stream::write::Encoder::new(cache_file, compression_level)?
                     .auto_finish(),
@@ -231,7 +235,7 @@ impl CacheGuard {
             cache_file.write_all(&serialized)
         }
         .context("failed to write cache to file")?;
-        info!("wrote cache to {}", path.display());
+        info!("wrote cache to {path:?}");
         Ok(())
     }
 }

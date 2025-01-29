@@ -55,6 +55,7 @@ pub enum ReturnedPost {
         meta: PostMetadata,
         body: Arc<str>,
         perf: RenderStats,
+        raw_name: Option<String>,
     },
     Raw {
         buffer: Vec<u8>,
@@ -149,14 +150,4 @@ pub trait PostManager {
     ) -> Result<ReturnedPost, PostError>;
 
     async fn cleanup(&self) {}
-
-    #[allow(unused)]
-    fn is_raw(&self, name: &str) -> bool {
-        false
-    }
-
-    #[allow(unused)]
-    fn as_raw(&self, name: &str) -> Option<String> {
-        None
-    }
 }

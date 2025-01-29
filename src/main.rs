@@ -1,4 +1,4 @@
-#![feature(let_chains, pattern, path_add_extension)]
+#![feature(let_chains, pattern, path_add_extension, if_let_guard)]
 
 mod app;
 mod config;
@@ -18,8 +18,10 @@ use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arc_swap::access::Map;
+use arc_swap::ArcSwap;
 use color_eyre::eyre::{self, Context};
-use config::Engine;
+use config::{Config, EngineMode};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
@@ -27,7 +29,7 @@ use tokio::time::Instant;
 use tokio::{select, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::level_filters::LevelFilter;
-use tracing::{debug, error, info, info_span, warn, Instrument};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
@@ -51,21 +53,25 @@ async fn main() -> eyre::Result<()> {
     );
     reg.with(tracing_subscriber::fmt::layer()).init();
 
-    let config = Arc::new(
-        config::load()
-            .await
-            .context("couldn't load configuration")?,
-    );
-
-    let socket_addr = SocketAddr::new(config.http.host, config.http.port);
-
     let mut tasks = JoinSet::new();
     let cancellation_token = CancellationToken::new();
 
+    let (config, config_file) = config::load()
+        .await
+        .context("couldn't load configuration")?;
+    let config = Arc::new(config);
+    let swapper = Arc::new(ArcSwap::from(config.clone()));
+    let config_cache_access: crate::post::cache::ConfigAccess =
+        Box::new(arc_swap::access::Map::new(swapper.clone(), |c: &Config| {
+            &c.cache
+        }));
+
+    info!("loaded config from {config_file:?}");
+
     let start = Instant::now();
     // NOTE: use tokio::task::spawn_blocking if this ever turns into a concurrent task
-    let mut reg = new_registry(&config.dirs.custom_templates)
-        .context("failed to create handlebars registry")?;
+    let mut reg =
+        new_registry(&config.dirs.templates).context("failed to create handlebars registry")?;
     reg.register_helper("date", Box::new(helpers::date));
     reg.register_helper("duration", Box::new(helpers::duration));
     debug!(duration = ?start.elapsed(), "registered all templates");
@@ -74,14 +80,11 @@ async fn main() -> eyre::Result<()> {
 
     debug!("setting up watcher");
     let watcher_token = cancellation_token.child_token();
-    tasks.spawn(
-        watch_templates(
-            config.dirs.custom_templates.clone(),
-            watcher_token.clone(),
-            registry.clone(),
-        )
-        .instrument(info_span!("custom_template_watcher")),
-    );
+    tasks.spawn(watch_templates(
+        config.dirs.templates.clone(),
+        watcher_token.clone(),
+        registry.clone(),
+    ));
 
     let cache = if config.cache.enable {
         if config.cache.persistence && tokio::fs::try_exists(&config.cache.file).await? {
@@ -104,17 +107,25 @@ async fn main() -> eyre::Result<()> {
     } else {
         None
     }
-    .map(|cache| CacheGuard::new(cache, config.cache.clone()))
+    .map(|cache| CacheGuard::new(cache, config_cache_access))
     .map(Arc::new);
 
-    let posts: Arc<dyn PostManager + Send + Sync> = match config.engine {
-        Engine::Markdown => Arc::new(MarkdownPosts::new(Arc::clone(&config), cache.clone()).await?),
-        Engine::Blag => Arc::new(Blag::new(
-            config.dirs.posts.clone().into(),
-            config.blag.bin.clone().into(),
-            cache.clone(),
-        )),
+    let posts: Arc<dyn PostManager + Send + Sync> = match config.engine.mode {
+        EngineMode::Markdown => {
+            let access = Map::new(swapper.clone(), |c: &Config| &c.engine.markdown);
+            Arc::new(MarkdownPosts::new(access, cache.clone()).await?)
+        }
+        EngineMode::Blag => {
+            let access = Map::new(swapper.clone(), |c: &Config| &c.engine.blag);
+            Arc::new(Blag::new(access, cache.clone()))
+        }
     };
+
+    debug!("setting up config watcher");
+
+    let token = cancellation_token.child_token();
+
+    tasks.spawn(config::watcher(config_file, token, swapper.clone()));
 
     if config.cache.enable && config.cache.cleanup {
         if let Some(millis) = config.cache.cleanup_interval {
@@ -138,12 +149,14 @@ async fn main() -> eyre::Result<()> {
     }
 
     let state = AppState {
-        config: Arc::clone(&config),
+        rss: Arc::new(Map::new(swapper.clone(), |c: &Config| &c.rss)),
+        style: Arc::new(Map::new(swapper.clone(), |c: &Config| &c.style)),
         posts,
         templates: registry,
     };
-    let app = app::new(&config).with_state(state.clone());
+    let app = app::new(&config.dirs).with_state(state.clone());
 
+    let socket_addr = SocketAddr::new(config.http.host, config.http.port);
     let listener = TcpListener::bind(socket_addr)
         .await
         .with_context(|| format!("couldn't listen on {}", socket_addr))?;

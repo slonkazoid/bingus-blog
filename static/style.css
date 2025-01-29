@@ -144,14 +144,14 @@ body > main > h1:first-child {
 }
 
 @media (min-width: 956px) {
-	:root {
+	:root:has(body.cool) {
 		--target-ratio: 0.7; /* 669px - 1344x */
 		--width: min(100% * var(--target-ratio), 1920px * var(--target-ratio));
 		--padding: 4em;
 		--padded-width: calc(var(--width) - var(--padding) * 2);
 	}
 
-	body {
+	body.cool {
 		padding: 4em 0;
 		min-height: calc(100vh - 8em);
 
@@ -165,13 +165,13 @@ body > main > h1:first-child {
 		);
 	}
 
-	body > * {
+	body.cool > * {
 		margin: auto;
 		padding: var(--padding);
 		width: var(--padded-width);
 	}
 
-	body > footer {
+	body.cool > footer {
 		padding: initial;
 		width: var(--width);
 	}

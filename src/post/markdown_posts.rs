@@ -7,6 +7,7 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 
+use arc_swap::access::Access;
 use axum::async_trait;
 use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
@@ -20,7 +21,7 @@ use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tracing::{info, instrument, warn};
 
-use crate::config::Config;
+use crate::config::MarkdownConfig;
 use crate::markdown_render::{build_syntect, render};
 use crate::systemtime_as_secs::as_secs;
 
@@ -66,23 +67,25 @@ impl FrontMatter {
     }
 }
 
-pub struct MarkdownPosts {
+pub struct MarkdownPosts<A> {
     cache: Option<Arc<CacheGuard>>,
-    config: Arc<Config>,
+    config: A,
     render_hash: u64,
     syntect: SyntectAdapter,
 }
 
-impl MarkdownPosts {
-    pub async fn new(
-        config: Arc<Config>,
-        cache: Option<Arc<CacheGuard>>,
-    ) -> eyre::Result<MarkdownPosts> {
-        let syntect =
-            build_syntect(&config.render).context("failed to create syntax highlighting engine")?;
+impl<A> MarkdownPosts<A>
+where
+    A: Access<MarkdownConfig>,
+    A: Sync,
+    A::Guard: Send,
+{
+    pub async fn new(config: A, cache: Option<Arc<CacheGuard>>) -> eyre::Result<Self> {
+        let syntect = build_syntect(&config.load().render)
+            .context("failed to create syntax highlighting engine")?;
 
         let mut hasher = DefaultHasher::new();
-        config.render.hash(&mut hasher);
+        config.load().render.hash(&mut hasher);
         let render_hash = hasher.finish();
 
         Ok(Self {
@@ -118,7 +121,7 @@ impl MarkdownPosts {
         let parsing = parsing_start.elapsed();
 
         let before_render = Instant::now();
-        let post = render(body, &self.config.render, Some(&self.syntect)).into();
+        let post = render(body, &self.config.load().render, Some(&self.syntect)).into();
         let rendering = before_render.elapsed();
 
         if let Some(cache) = &self.cache {
@@ -135,10 +138,27 @@ impl MarkdownPosts {
 
         Ok((metadata, post, (parsing, rendering)))
     }
+
+    fn is_raw(name: &str) -> bool {
+        name.ends_with(".md")
+    }
+
+    fn as_raw(name: &str) -> Option<String> {
+        let mut buf = String::with_capacity(name.len() + 3);
+        buf += name;
+        buf += ".md";
+
+        Some(buf)
+    }
 }
 
 #[async_trait]
-impl PostManager for MarkdownPosts {
+impl<A> PostManager for MarkdownPosts<A>
+where
+    A: Access<MarkdownConfig>,
+    A: Sync,
+    A::Guard: Send,
+{
     async fn get_all_posts(
         &self,
         filters: &[Filter<'_>],
@@ -146,7 +166,7 @@ impl PostManager for MarkdownPosts {
     ) -> Result<Vec<(PostMetadata, Arc<str>, RenderStats)>, PostError> {
         let mut posts = Vec::new();
 
-        let mut read_dir = fs::read_dir(&self.config.dirs.posts).await?;
+        let mut read_dir = fs::read_dir(&self.config.load().root).await?;
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
             let stat = fs::metadata(&path).await?;
@@ -161,7 +181,9 @@ impl PostManager for MarkdownPosts {
                     .into();
 
                 let post = self.get_post(Arc::clone(&name), query).await?;
-                if let ReturnedPost::Rendered { meta, body, perf } = post
+                if let ReturnedPost::Rendered {
+                    meta, body, perf, ..
+                } = post
                     && meta.apply_filters(filters)
                 {
                     posts.push((meta, body, perf));
@@ -179,7 +201,7 @@ impl PostManager for MarkdownPosts {
     ) -> Result<Vec<PostMetadata>, PostError> {
         let mut posts = Vec::new();
 
-        let mut read_dir = fs::read_dir(&self.config.dirs.posts).await?;
+        let mut read_dir = fs::read_dir(&self.config.load().root).await?;
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
             let stat = fs::metadata(&path).await?;
@@ -225,8 +247,9 @@ impl PostManager for MarkdownPosts {
         name: Arc<str>,
         _query: &IndexMap<String, Value>,
     ) -> Result<ReturnedPost, PostError> {
-        let post = if self.config.markdown_access && self.is_raw(&name) {
-            let path = self.config.dirs.posts.join(&*name);
+        let config = self.config.load();
+        let post = if config.raw_access && Self::is_raw(&name) {
+            let path = config.root.join(&*name);
 
             let mut file = match tokio::fs::OpenOptions::new().read(true).open(&path).await {
                 Ok(value) => value,
@@ -248,11 +271,8 @@ impl PostManager for MarkdownPosts {
             }
         } else {
             let start = Instant::now();
-            let path = self
-                .config
-                .dirs
-                .posts
-                .join(self.as_raw(&name).unwrap_or_else(|| unreachable!()));
+            let raw_name = Self::as_raw(&name).unwrap_or_else(|| unreachable!());
+            let path = config.root.join(&raw_name);
 
             let stat = match tokio::fs::metadata(&path).await {
                 Ok(value) => value,
@@ -265,26 +285,29 @@ impl PostManager for MarkdownPosts {
             };
             let mtime = as_secs(stat.modified()?);
 
-            if let Some(cache) = &self.cache
+            let (meta, body, perf) = if let Some(cache) = &self.cache
                 && let Some(CacheValue { meta, body, .. }) =
                     cache.lookup(name.clone(), mtime, self.render_hash).await
             {
-                ReturnedPost::Rendered {
-                    meta,
-                    body,
-                    perf: RenderStats::Cached(start.elapsed()),
-                }
+                (meta, body, RenderStats::Cached(start.elapsed()))
             } else {
                 let (meta, body, stats) = self.parse_and_render(name, path).await?;
-                ReturnedPost::Rendered {
+                (
                     meta,
                     body,
-                    perf: RenderStats::Rendered {
+                    RenderStats::Rendered {
                         total: start.elapsed(),
                         parsed: stats.0,
                         rendered: stats.1,
                     },
-                }
+                )
+            };
+
+            ReturnedPost::Rendered {
+                meta,
+                body,
+                perf,
+                raw_name: config.raw_access.then_some(raw_name),
             }
         };
 
@@ -306,9 +329,9 @@ impl PostManager for MarkdownPosts {
 
                     let mtime = std::fs::metadata(
                         self.config
-                            .dirs
-                            .posts
-                            .join(self.as_raw(name).unwrap_or_else(|| unreachable!())),
+                            .load()
+                            .root
+                            .join(Self::as_raw(name).unwrap_or_else(|| unreachable!())),
                     )
                     .ok()
                     .and_then(|metadata| metadata.modified().ok())
@@ -321,17 +344,5 @@ impl PostManager for MarkdownPosts {
                 })
                 .await
         }
-    }
-
-    fn is_raw(&self, name: &str) -> bool {
-        name.ends_with(".md")
-    }
-
-    fn as_raw(&self, name: &str) -> Option<String> {
-        let mut buf = String::with_capacity(name.len() + 3);
-        buf += name;
-        buf += ".md";
-
-        Some(buf)
     }
 }

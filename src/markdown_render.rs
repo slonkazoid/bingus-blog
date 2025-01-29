@@ -6,9 +6,9 @@ use comrak::ComrakOptions;
 use comrak::RenderPlugins;
 use syntect::highlighting::ThemeSet;
 
-use crate::config::RenderConfig;
+use crate::config::MarkdownRenderConfig;
 
-pub fn build_syntect(config: &RenderConfig) -> eyre::Result<SyntectAdapter> {
+pub fn build_syntect(config: &MarkdownRenderConfig) -> eyre::Result<SyntectAdapter> {
     let mut theme_set = if config.syntect.load_defaults {
         ThemeSet::load_defaults()
     } else {
@@ -28,7 +28,7 @@ pub fn build_syntect(config: &RenderConfig) -> eyre::Result<SyntectAdapter> {
 
 pub fn render(
     markdown: &str,
-    config: &RenderConfig,
+    config: &MarkdownRenderConfig,
     syntect: Option<&dyn SyntaxHighlighterAdapter>,
 ) -> String {
     let mut options = ComrakOptions::default();

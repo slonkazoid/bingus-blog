@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use arc_swap::access::DynAccess;
 use axum::extract::{Path, Query, State};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::Request;
@@ -19,7 +20,7 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span, Span};
 
-use crate::config::{Config, StyleConfig};
+use crate::config::{DirsConfig, RssConfig, StyleConfig};
 use crate::error::{AppError, AppResult};
 use crate::post::{Filter, PostManager, PostMetadata, RenderStats, ReturnedPost};
 use crate::serve_dir_included::handle;
@@ -42,7 +43,8 @@ const BINGUS_INFO: BingusInfo = BingusInfo {
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct AppState {
-    pub config: Arc<Config>,
+    pub rss: Arc<dyn DynAccess<RssConfig> + Send + Sync>,
+    pub style: Arc<dyn DynAccess<StyleConfig> + Send + Sync>,
     pub posts: Arc<dyn PostManager + Send + Sync>,
     pub templates: Arc<RwLock<Handlebars<'static>>>,
 }
@@ -50,8 +52,6 @@ pub struct AppState {
 #[derive(Serialize)]
 struct IndexTemplate<'a> {
     bingus_info: &'a BingusInfo,
-    title: &'a str,
-    description: &'a str,
     posts: Vec<PostMetadata>,
     rss: bool,
     js: bool,
@@ -64,8 +64,8 @@ struct IndexTemplate<'a> {
 struct PostTemplate<'a> {
     bingus_info: &'a BingusInfo,
     meta: &'a PostMetadata,
-    rendered: Arc<str>,
-    rendered_in: RenderStats,
+    body: Arc<str>,
+    perf: RenderStats,
     js: bool,
     color: Option<&'a str>,
     joined_tags: String,
@@ -116,7 +116,8 @@ fn join_tags_for_meta(tags: &IndexMap<Arc<str>, u64>, delim: &str) -> String {
 
 async fn index(
     State(AppState {
-        config,
+        rss,
+        style,
         posts,
         templates: reg,
         ..
@@ -135,21 +136,21 @@ async fn index(
     let joined_tags = join_tags_for_meta(&tags, ", ");
 
     let reg = reg.read().await;
+    let style = style.load();
     let rendered = reg.render(
         "index",
         &IndexTemplate {
-            title: &config.title,
-            description: &config.description,
             bingus_info: &BINGUS_INFO,
             posts,
-            rss: config.rss.enable,
-            js: config.js_enable,
+            rss: rss.load().enable,
+            js: style.js_enable,
             tags,
             joined_tags,
-            style: &config.style,
+            style: &style,
         },
     );
-    drop(reg);
+    drop((style, reg));
+
     Ok(Html(rendered?))
 }
 
@@ -169,10 +170,12 @@ async fn all_posts(
 }
 
 async fn rss(
-    State(AppState { config, posts, .. }): State<AppState>,
+    State(AppState {
+        rss, style, posts, ..
+    }): State<AppState>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<Response> {
-    if !config.rss.enable {
+    if !rss.load().enable {
         return Err(AppError::RssDisabled);
     }
 
@@ -187,11 +190,13 @@ async fn rss(
         )
         .await?;
 
+    let rss = rss.load();
+    let style = style.load();
     let mut channel = ChannelBuilder::default();
     channel
-        .title(&config.title)
-        .link(config.rss.link.to_string())
-        .description(&config.description);
+        .title(&*style.title)
+        .link(rss.link.to_string())
+        .description(&*style.description);
     //TODO: .language()
 
     for (metadata, content, _) in posts {
@@ -213,15 +218,14 @@ async fn rss(
                 .pub_date(metadata.written_at.map(|date| date.to_rfc2822()))
                 .content(content.to_string())
                 .link(
-                    config
-                        .rss
-                        .link
+                    rss.link
                         .join(&format!("/posts/{}", metadata.name))?
                         .to_string(),
                 )
                 .build(),
         );
     }
+    drop((style, rss));
 
     let body = channel.build().to_string();
     drop(channel);
@@ -231,7 +235,7 @@ async fn rss(
 
 async fn post(
     State(AppState {
-        config,
+        style,
         posts,
         templates: reg,
         ..
@@ -242,33 +246,30 @@ async fn post(
     match posts.get_post(name.clone(), &query.other).await? {
         ReturnedPost::Rendered {
             ref meta,
-            body: rendered,
-            perf: rendered_in,
+            body,
+            perf,
+            raw_name,
         } => {
             let joined_tags = meta.tags.join(", ");
 
             let reg = reg.read().await;
+            let style = style.load();
             let rendered = reg.render(
                 "post",
                 &PostTemplate {
                     bingus_info: &BINGUS_INFO,
                     meta,
-                    rendered,
-                    rendered_in,
-                    js: config.js_enable,
-                    color: meta
-                        .color
-                        .as_deref()
-                        .or(config.style.default_color.as_deref()),
+                    body,
+                    perf,
+                    js: style.js_enable,
+                    color: meta.color.as_deref().or(style.default_color.as_deref()),
                     joined_tags,
-                    style: &config.style,
-                    raw_name: config
-                        .markdown_access
-                        .then(|| posts.as_raw(&meta.name))
-                        .unwrap_or(None),
+                    style: &style,
+                    raw_name,
                 },
             );
-            drop(reg);
+            drop((style, reg));
+
             Ok(Html(rendered?).into_response())
         }
         ReturnedPost::Raw {
@@ -278,7 +279,7 @@ async fn post(
     }
 }
 
-pub fn new(config: &Config) -> Router<AppState> {
+pub fn new(dirs: &DirsConfig) -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route(
@@ -292,11 +293,11 @@ pub fn new(config: &Config) -> Router<AppState> {
         .route("/feed.xml", get(rss))
         .nest_service(
             "/static",
-            ServeDir::new(&config.dirs.custom_static)
+            ServeDir::new(&dirs.static_)
                 .precompressed_gzip()
                 .fallback(service_fn(|req| handle(req, &STATIC))),
         )
-        .nest_service("/media", ServeDir::new(&config.dirs.media))
+        .nest_service("/media", ServeDir::new(&dirs.media))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<_>| {
