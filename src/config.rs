@@ -265,7 +265,7 @@ impl Default for BlagConfig {
 
 fn config_path() -> Cow<'static, str> {
     env::var(concat!(
-        convert_ascii_case!(upper_camel, env!("CARGO_BIN_NAME")),
+        convert_ascii_case!(shouty_snake, env!("CARGO_BIN_NAME")),
         "_CONFIG"
     ))
     .map(Into::into)
