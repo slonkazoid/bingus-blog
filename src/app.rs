@@ -197,7 +197,7 @@ async fn posts(
     let reg = templates.read().await;
     let style = style.load();
     let rendered = reg.render(
-        "index",
+        "posts",
         &PostsTemplate {
             bingus_info: &BINGUS_INFO,
             posts,
