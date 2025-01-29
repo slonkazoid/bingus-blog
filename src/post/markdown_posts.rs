@@ -19,7 +19,7 @@ use serde::Deserialize;
 use serde_value::Value;
 use tokio::fs;
 use tokio::io::AsyncReadExt;
-use tracing::{info, instrument, warn};
+use tracing::{error, info, instrument};
 
 use crate::config::MarkdownConfig;
 use crate::markdown_render::{build_syntect, render};
@@ -168,27 +168,36 @@ where
 
         let mut read_dir = fs::read_dir(&self.config.load().root).await?;
         while let Some(entry) = read_dir.next_entry().await? {
-            let path = entry.path();
-            let stat = fs::metadata(&path).await?;
+            if let Err(err) = async {
+                let path = entry.path();
+                let stat = fs::metadata(&path).await?;
 
-            if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
-                let name = path
-                    .clone()
-                    .file_stem()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string()
-                    .into();
+                if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
+                    let name = path
+                        .clone()
+                        .file_stem()
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string()
+                        .into();
 
-                let post = self.get_post(Arc::clone(&name), query).await?;
-                if let ReturnedPost::Rendered {
-                    meta, body, perf, ..
-                } = post
-                    && meta.apply_filters(filters)
-                {
-                    posts.push((meta, body, perf));
+                    let post = self.get_post(Arc::clone(&name), query).await?;
+                    if let ReturnedPost::Rendered {
+                        meta, body, perf, ..
+                    } = post
+                        && meta.apply_filters(filters)
+                    {
+                        posts.push((meta, body, perf));
+                    }
                 }
+
+                color_eyre::eyre::Ok(())
             }
+            .await
+            {
+                error!("error while getting post: {err}");
+                continue;
+            };
         }
 
         Ok(posts)
@@ -203,39 +212,37 @@ where
 
         let mut read_dir = fs::read_dir(&self.config.load().root).await?;
         while let Some(entry) = read_dir.next_entry().await? {
-            let path = entry.path();
-            let stat = fs::metadata(&path).await?;
+            if let Err(err) = async {
+                let path = entry.path();
+                let stat = fs::metadata(&path).await?;
 
-            if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
-                let mtime = as_secs(stat.modified()?);
-                let name: Arc<str> =
-                    String::from(path.file_stem().unwrap().to_string_lossy()).into();
+                if stat.is_file() && path.extension().is_some_and(|ext| ext == "md") {
+                    let mtime = as_secs(stat.modified()?);
+                    let name: Arc<str> =
+                        String::from(path.file_stem().unwrap().to_string_lossy()).into();
 
-                if let Some(cache) = &self.cache
-                    && let Some(hit) = cache
-                        .lookup_metadata(name.clone(), mtime, self.render_hash)
-                        .await
-                    && hit.apply_filters(filters)
-                {
-                    posts.push(hit);
-                } else {
-                    match self.parse_and_render(name, path).await {
-                        Ok((metadata, ..)) => {
-                            if metadata.apply_filters(filters) {
-                                posts.push(metadata);
-                            }
+                    if let Some(cache) = &self.cache
+                        && let Some(hit) = cache
+                            .lookup_metadata(name.clone(), mtime, self.render_hash)
+                            .await
+                        && hit.apply_filters(filters)
+                    {
+                        posts.push(hit);
+                    } else {
+                        let (metadata, ..) = self.parse_and_render(name, path).await?;
+                        if metadata.apply_filters(filters) {
+                            posts.push(metadata);
                         }
-                        Err(err) => match err {
-                            PostError::IoError(ref io_err)
-                                if matches!(io_err.kind(), io::ErrorKind::NotFound) =>
-                            {
-                                warn!("TOCTOU: {}", err)
-                            }
-                            _ => return Err(err),
-                        },
                     }
                 }
+
+                color_eyre::eyre::Ok(())
             }
+            .await
+            {
+                error!("error while getting post metadata: {err}");
+                continue;
+            };
         }
 
         Ok(posts)
