@@ -126,6 +126,7 @@ pub struct MarkdownRenderConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct MarkdownConfig {
     pub root: Box<Path>,
     pub render: MarkdownRenderConfig,
