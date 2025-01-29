@@ -110,7 +110,8 @@ standard. examples of valid and invalid dates:
 ## Non-static Routes
 
 - `GET /`: index page, lists posts
-- `GET /posts`: returns a list of all posts with metadata in JSON format
+- `GET /posts`: small preview of posts for embedding in other sites and such
+- `GET /posts.json`: returns a list of all posts with metadata in JSON format
 - `GET /posts/<name>`: view a post
 - `GET /posts/<name>.md`: view the raw markdown of a post
 - `GET /post/*`: redirects to `/posts/*`

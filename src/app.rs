@@ -61,6 +61,14 @@ struct IndexTemplate<'a> {
 }
 
 #[derive(Serialize)]
+struct PostsTemplate<'a> {
+    bingus_info: &'a BingusInfo,
+    posts: Vec<PostMetadata>,
+    js: bool,
+    style: &'a StyleConfig,
+}
+
+#[derive(Serialize)]
 struct PostTemplate<'a> {
     bingus_info: &'a BingusInfo,
     meta: &'a PostMetadata,
@@ -119,7 +127,7 @@ async fn index(
         rss,
         style,
         posts,
-        templates: reg,
+        templates,
         ..
     }): State<AppState>,
     Query(query): Query<QueryParams>,
@@ -135,7 +143,7 @@ async fn index(
     let tags = collect_tags(&posts);
     let joined_tags = join_tags_for_meta(&tags, ", ");
 
-    let reg = reg.read().await;
+    let reg = templates.read().await;
     let style = style.load();
     let rendered = reg.render(
         "index",
@@ -154,7 +162,7 @@ async fn index(
     Ok(Html(rendered?))
 }
 
-async fn all_posts(
+async fn posts_json(
     State(AppState { posts, .. }): State<AppState>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<Json<Vec<PostMetadata>>> {
@@ -167,6 +175,39 @@ async fn all_posts(
         .await?;
 
     Ok(Json(posts))
+}
+
+async fn posts(
+    State(AppState {
+        posts,
+        templates,
+        style,
+        ..
+    }): State<AppState>,
+    Query(query): Query<QueryParams>,
+) -> AppResult<Html<String>> {
+    let posts = posts
+        .get_max_n_post_metadata_with_optional_tag_sorted(
+            query.num_posts,
+            query.tag.as_deref(),
+            &query.other,
+        )
+        .await?;
+
+    let reg = templates.read().await;
+    let style = style.load();
+    let rendered = reg.render(
+        "index",
+        &PostsTemplate {
+            bingus_info: &BINGUS_INFO,
+            posts,
+            js: style.js_enable,
+            style: &style,
+        },
+    );
+    drop((style, reg));
+
+    Ok(Html(rendered?))
 }
 
 async fn rss(
@@ -237,7 +278,7 @@ async fn post(
     State(AppState {
         style,
         posts,
-        templates: reg,
+        templates,
         ..
     }): State<AppState>,
     Path(name): Path<Arc<str>>,
@@ -252,7 +293,7 @@ async fn post(
         } => {
             let joined_tags = meta.tags.join(", ");
 
-            let reg = reg.read().await;
+            let reg = templates.read().await;
             let style = style.load();
             let rendered = reg.render(
                 "post",
@@ -289,7 +330,8 @@ pub fn new(dirs: &DirsConfig) -> Router<AppState> {
             ),
         )
         .route("/posts/:name", get(post))
-        .route("/posts", get(all_posts))
+        .route("/posts", get(posts))
+        .route("/posts.json", get(posts_json))
         .route("/feed.xml", get(rss))
         .nest_service(
             "/static",
