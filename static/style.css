@@ -145,7 +145,7 @@ body > main > h1:first-child {
 
 @media (min-width: 956px) {
 	:root:has(body.cool) {
-		--target-ratio: 0.7; /* 669px - 1344x */
+		--target-ratio: 0.6;
 		--width: min(100% * var(--target-ratio), 1920px * var(--target-ratio));
 		--padding: 4em;
 		--padded-width: calc(var(--width) - var(--padding) * 2);
