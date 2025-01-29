@@ -143,7 +143,7 @@ body > main > h1:first-child {
 	margin-top: 0;
 }
 
-@media (min-width: 956px) {
+@media (min-width: 900px) {
 	:root:has(body.cool) {
 		--target-ratio: 0.6;
 		--width: min(100% * var(--target-ratio), 1920px * var(--target-ratio));
