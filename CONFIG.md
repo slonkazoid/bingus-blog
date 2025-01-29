@@ -49,11 +49,12 @@ enable = false         # serve an rss field under /feed.xml
                        # this may be a bit resource intensive
 link = "https://..."   # public url of the blog, required if rss is enabled
 
-[dirs]
+[custom]               # custom override directories
 media = "media"        # directory served under /media/
-custom_templates = "templates" # custom templates dir
-custom_static = "static"       # custom static dir
+templates = "templates" # handlebars template drop-ins dir
+static = "static"      # custom static directory
                        # see CUSTOM.md for documentation
+
 [http]
 host = "::"            # ip to listen on
 port = 3000            # port to listen on

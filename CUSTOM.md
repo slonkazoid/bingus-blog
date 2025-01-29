@@ -3,7 +3,7 @@
 bingus-blog supports loading custom content such as templates and static files
 at runtime from custom locations.
 
-the configuration options `dirs.custom_templates` and `dirs.custom_static`
+the configuration options `custom.templates` and `custom.static`
 allow you to set where these files are loaded from.
 
 customizing the error page, other than CSS, is not supported at this time.
@@ -37,7 +37,7 @@ at startup. if you delete/create the directory, you must restart the program.
 
 ## Custom Static Files
 
-GET requests to `/static` will first be checked against `dirs.custom_static`.
+GET requests to `/static` will first be checked against `custom.static`.
 if the file is not found in the *custom static directory*, bingus-blog will try
 to serve it from the directory embedded in the executable. this means you can
 add whatever you want in the *custom static directory* and it will be served
@@ -45,5 +45,5 @@ under `/static`.
 
 ## Custom Media
 
-the endpoint `/media` is served from `dirs.media`. no other logic or mechanism
+the endpoint `/media` is served from `custom.media`. no other logic or mechanism
 is present.
