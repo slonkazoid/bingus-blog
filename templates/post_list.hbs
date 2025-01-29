@@ -1,0 +1,10 @@
+{{#each posts}}
+	<div class="post">
+		<section>
+			<a href="/posts/{{name}}"><b>{{title}}</b></a>
+			<span class="post-author">- by {{author}}</span>
+		</section>
+		<section role="paragraph">{{description}}</section>
+		{{>post_table post style=@root.style}}
+	</div>
+{{else}} there are no posts right now. check back later! {{/each}}

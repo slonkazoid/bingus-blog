@@ -2,17 +2,17 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta name="description" content="{{title}}" />
-		<meta property="og:title" content="{{title}}" />
-		<meta property="og:description" content="{{description}}" />
+		<meta name="description" content="{{style.title}}" />
+		<meta property="og:title" content="{{style.title}}" />
+		<meta property="og:description" content="{{style.description}}" />
 		<meta name="keywords" content="{{joined_tags}}" />
 		{{#if (ne color null)}}
 			<meta name="theme-color" content="{{style.color}}" />
 		{{/if}}
-		<title>{{title}}</title>
+		<title>{{style.title}}</title>
 		<link rel="stylesheet" href="/static/style.css" />
 		{{#if rss}}
-			<link rel="alternate" type="application/rss+xml" title="{{title}}" href="/feed.xml" />
+			<link rel="alternate" type="application/rss+xml" title="{{style.title}}" href="/feed.xml" />
 		{{/if}}
 		{{#if js}}
 			<script src="/static/date.js" defer></script>
@@ -20,7 +20,7 @@
 			<script src="/static/main.js" defer></script>
 		{{/if}}
 	</head>
-	<body>
+	<body class="cool">
 		<main>
 			{{>title}}
 			<h2>posts</h2>
@@ -36,15 +36,7 @@
 					</form>
 				{{/if}}
 				<div id="posts">
-					{{#each posts}}
-							<div class="post">
-								<a href="/posts/{{name}}"><b>{{title}}</b></a>
-								<span class="post-author">- by {{author}}</span>
-								<br />
-								{{description}}<br />
-								{{>post_table post style=@root.style}}
-							</div>
-					{{else}} there are no posts right now. check back later! {{/each}}
+					{{>post_list}}
 				</div>
 			</div>
 

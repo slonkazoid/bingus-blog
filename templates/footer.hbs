@@ -1,10 +1,10 @@
 running
 <a href="{{bingus_info.repository}}" target="_blank">{{bingus_info.name}}</a>
 v{{bingus_info.version}}
-{{#if rendered_in}}
+{{#if perf}}
 	<b> - </b>
 {{/if}}
-{{#each rendered_in}}
+{{#each perf}}
 	{{#if (eq @key "Rendered")}}
 		<span class="tooltipped" title="parsing metadata took {{duration this.parsed}}">parsed meta</span>
 		and

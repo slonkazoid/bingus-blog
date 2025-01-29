@@ -1,0 +1,23 @@
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>{{title}}</title>
+		<link rel="stylesheet" href="/static/style.css" />
+		{{#if rss}}
+			<link rel="alternate" type="application/rss+xml" title="{{title}}" href="/feed.xml" />
+		{{/if}}
+		{{#if js}}
+			<script src="/static/date.js" defer></script>
+			<script src="/static/sort.js" defer></script>
+			<script src="/static/main.js" defer></script>
+		{{/if}}
+	</head>
+	<body>
+		<main>
+			<div id="posts">
+				{{>post_list}}
+			</div>
+		</main>
+	</body>
+</html>
