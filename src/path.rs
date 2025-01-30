@@ -4,7 +4,6 @@ use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
-use thiserror::Error;
 
 pub struct SafePath<T>(pub T);
 
@@ -28,16 +27,25 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum SafePathRejection {
-    #[error("path contains invalid characters")]
     Invalid,
-    #[error(transparent)]
-    PathRejection(#[from] PathRejection),
+    PathRejection(PathRejection),
+}
+
+impl From<PathRejection> for SafePathRejection {
+    fn from(value: PathRejection) -> Self {
+        Self::PathRejection(value)
+    }
 }
 
 impl IntoResponse for SafePathRejection {
     fn into_response(self) -> Response {
-        (StatusCode::BAD_REQUEST, self.to_string()).into_response()
+        match self {
+            SafePathRejection::Invalid => {
+                (StatusCode::BAD_REQUEST, "path contains invalid characters").into_response()
+            }
+            SafePathRejection::PathRejection(err) => err.into_response(),
+        }
     }
 }
