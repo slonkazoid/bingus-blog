@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use askama_axum::Template;
+use askama::Template;
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use color_eyre::eyre;
 use thiserror::Error;
 use tracing::error;
@@ -46,7 +46,7 @@ impl From<serde_json::Error> for PostError {
 }
 
 impl IntoResponse for PostError {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> Response {
         (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()).into_response()
     }
 }
@@ -88,6 +88,17 @@ impl IntoResponse for AppError {
             AppError::RssDisabled => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (status_code, ErrorTemplate { error }).into_response()
+
+        match (ErrorTemplate { error }.render()) {
+            Ok(rendered) => (status_code, Html(rendered)).into_response(),
+            Err(err) => {
+                error!("error while rendering error template: {err}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "error while trying to show error. good job",
+                )
+                    .into_response()
+            }
+        }
     }
 }

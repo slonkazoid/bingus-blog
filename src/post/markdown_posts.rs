@@ -8,7 +8,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use arc_swap::access::Access;
-use axum::async_trait;
+use async_trait::async_trait;
 use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{self, Context};

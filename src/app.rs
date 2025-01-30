@@ -22,6 +22,7 @@ use tracing::{info, info_span, Span};
 
 use crate::config::{DirsConfig, RssConfig, StyleConfig};
 use crate::error::{AppError, AppResult};
+use crate::path::SafePath;
 use crate::post::{Filter, PostManager, PostMetadata, RenderStats, ReturnedPost};
 use crate::serve_dir_included::handle;
 
@@ -281,7 +282,7 @@ async fn post(
         templates,
         ..
     }): State<AppState>,
-    Path(name): Path<Arc<str>>,
+    SafePath(name): SafePath<Arc<str>>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<impl IntoResponse> {
     match posts.get_post(name.clone(), &query.other).await? {

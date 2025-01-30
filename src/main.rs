@@ -6,6 +6,7 @@ mod de;
 mod error;
 mod helpers;
 mod markdown_render;
+mod path;
 mod platform;
 mod post;
 mod serve_dir_included;

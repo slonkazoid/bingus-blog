@@ -1,9 +1,9 @@
 use color_eyre::eyre::{self, Context};
 use comrak::adapters::SyntaxHighlighterAdapter;
-use comrak::markdown_to_html_with_plugins;
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::ComrakOptions;
 use comrak::RenderPlugins;
+use comrak::{markdown_to_html_with_plugins, Plugins};
 use syntect::highlighting::ThemeSet;
 
 use crate::config::MarkdownRenderConfig;
@@ -42,10 +42,12 @@ pub fn render(
     options.render.escape = config.escape;
     options.render.unsafe_ = config.unsafe_;
 
-    let mut render_plugins = RenderPlugins::default();
-    render_plugins.codefence_syntax_highlighter = syntect;
+    let render_plugins = RenderPlugins {
+        codefence_syntax_highlighter: syntect,
+        ..Default::default()
+    };
 
-    let plugins = comrak::Plugins::builder().render(render_plugins).build();
+    let plugins = Plugins::builder().render(render_plugins).build();
 
     markdown_to_html_with_plugins(markdown, &options, &plugins)
 }

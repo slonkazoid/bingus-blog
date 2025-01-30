@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::access::Access;
-use axum::async_trait;
+use async_trait::async_trait;
 use axum::http::HeaderValue;
 use chrono::{DateTime, Utc};
 use futures::stream::FuturesUnordered;

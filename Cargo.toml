@@ -16,11 +16,9 @@ strip = true
 
 [dependencies]
 arc-swap = { version = "1.7.1", features = ["serde"] }
-askama = { version = "0.12.1", features = [
-  "with-axum",
-], default-features = false }
-askama_axum = { version = "0.4.0", default-features = false }
-axum = { version = "0.7.5", features = [
+askama = { version = "0.12.1", default-features = false }
+async-trait = "0.1.85"
+axum = { version = "0.8.1", features = [
   "http1",
   "json",
   "query",
@@ -34,18 +32,19 @@ chrono = { version = "0.4.37", features = [
   "serde",
 ], default-features = false }
 color-eyre = "0.6.3"
-comrak = { version = "0.32.0", features = [
+comrak = { version = "0.35.0", features = [
   "syntect",
+  "bon",
 ], default-features = false }
 console-subscriber = { version = "0.4.1", optional = true }
-const-str = "0.5.7"
+const-str = "0.6.0"
 fronma = "0.2.0"
 futures = "0.3.31"
 handlebars = "6.0.0"
 include_dir = "0.7.4"
 indexmap = { version = "2.7.0", features = ["serde"] }
 mime_guess = "2.0.5"
-notify-debouncer-full = { version = "0.4.0", default-features = false }
+notify-debouncer-full = { version = "0.5.0", default-features = false }
 rss = "2.0.7"
 scc = { version = "2.1.0", features = ["serde"] }
 serde = { version = "1.0.197", features = ["derive", "rc"] }

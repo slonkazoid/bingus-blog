@@ -359,7 +359,7 @@ pub async fn watcher(
         .parent()
         .expect("absolute path to have parent");
     debouncer
-        .watch(&dir, RecursiveMode::NonRecursive)
+        .watch(dir, RecursiveMode::NonRecursive)
         .with_context(|| format!("failed to watch {dir:?}"))?;
 
     'event_loop: while let Some(ev) = select! {
