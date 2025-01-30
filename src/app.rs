@@ -324,12 +324,10 @@ pub fn new(dirs: &DirsConfig) -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route(
-            "/post/:name",
-            get(
-                |Path(name): Path<String>| async move { Redirect::to(&format!("/posts/{}", name)) },
-            ),
+            "/post/{name}",
+            get(|Path(name): Path<String>| async move { Redirect::to(&format!("/posts/{name}")) }),
         )
-        .route("/posts/:name", get(post))
+        .route("/posts/{name}", get(post))
         .route("/posts", get(posts))
         .route("/posts.json", get(posts_json))
         .route("/feed.xml", get(rss))
