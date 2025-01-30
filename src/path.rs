@@ -21,7 +21,7 @@ where
         let s = Path::<T>::from_request_parts(parts, state).await?.0;
 
         if s.as_ref().contains("..") || s.as_ref().contains('/') {
-            return Err(SafePathRejection::Test);
+            return Err(SafePathRejection::Invalid);
         }
 
         Ok(SafePath(s))
@@ -30,8 +30,8 @@ where
 
 #[derive(Error, Debug)]
 pub enum SafePathRejection {
-    #[error("test")]
-    Test,
+    #[error("path contains invalid characters")]
+    Invalid,
     #[error(transparent)]
     PathRejection(#[from] PathRejection),
 }
