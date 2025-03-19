@@ -37,9 +37,20 @@ img {
 table,
 td,
 th {
-	border: 1px solid var(--text);
 	border-collapse: collapse;
+}
+
+td,
+th {
 	padding: 0.5em;
+	border: 2px solid var(--text);
+}
+
+table {
+	display: block;
+	max-width: 100%;
+	box-sizing: border-box;
+	overflow-x: scroll;
 }
 
 th {
