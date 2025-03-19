@@ -3,13 +3,13 @@
 	vertical-align: middle;
 	margin: auto;
 	text-align: left;
-	width: 1rem;
+	padding-right: 1rem;
 }
 .anchor::before {
 	content: "§";
-}
-.anchor::after {
-	content: " ";
+	width: 1rem;
+	display: inline-block;
+	user-select: none;
 }
 
 code {
