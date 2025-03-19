@@ -30,8 +30,9 @@
 
 :root {
 	/* please have one at least one good monospace font */
-	font-family: "Hack", "Hack Nerd Font", "JetBrains Mono", "JetBrainsMono Nerd Font", "Source Code Pro", "Ubuntu Mono", monospace,
-		"Noto Sans", sans-serif;
+	font-family:
+		"Hack", "Hack Nerd Font", "JetBrains Mono", "JetBrainsMono Nerd Font", "Source Code Pro", "Ubuntu Mono", monospace, "Noto Sans",
+		sans-serif;
 }
 
 code {
@@ -128,15 +129,17 @@ div.post {
 
 body {
 	margin: 0;
-	padding: 0;
+	padding: 2em 0;
+	box-sizing: border-box;
+	min-height: 100dvh;
 
 	background-color: var(--base);
 }
 
 main {
-	padding: 1em;
+	padding: 2em;
 
-	background-color: var(--base);
+	background-color: var(--base); /* else it's transparent */
 }
 
 body > main > h1:first-child {
@@ -144,16 +147,22 @@ body > main > h1:first-child {
 }
 
 @media (min-width: 900px) {
-	:root:has(body.cool) {
+	:root {
 		--target-ratio: 0.6;
-		--width: min(100% * var(--target-ratio), 1920px * var(--target-ratio));
-		--padding: 4em;
-		--padded-width: calc(var(--width) - var(--padding) * 2);
+		/* prettier-ignore */
+		--largest-possible: min(
+			100% * var(--target-ratio),  /* target size */
+			1600px * var(--target-ratio) /* max size */
+		);
+		/* prettier-ignore */
+		--width: max(
+			var(--largest-possible),
+			1200px * var(--target-ratio)     /* min size */
+		);
 	}
 
-	body.cool {
+	body {
 		padding: 4em 0;
-		min-height: calc(100vh - 8em);
 
 		background: var(--crust);
 		background: linear-gradient(
@@ -165,14 +174,9 @@ body > main > h1:first-child {
 		);
 	}
 
-	body.cool > * {
+	body > * {
 		margin: auto;
-		padding: var(--padding);
-		width: var(--padded-width);
-	}
-
-	body.cool > footer {
-		padding: initial;
+		box-sizing: border-box;
 		width: var(--width);
 	}
 }
