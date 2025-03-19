@@ -1,14 +1,14 @@
 .anchor {
-	text-decoration: none;
-	vertical-align: middle;
-	margin: auto;
-	text-align: left;
 	padding-right: 1rem;
 }
 .anchor::before {
 	content: "§";
+	text-decoration: none;
+	text-align: center;
+	vertical-align: middle;
 	width: 1rem;
 	display: inline-block;
+	margin: auto;
 	user-select: none;
 }
 
